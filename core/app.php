@@ -3960,7 +3960,8 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     function renderSheetPreview() {
       if (!window.ABCJS || !els.sheetPreview) return;
       try {
-        ABCJS.renderAbc(els.sheetPreview, els.sheetAbc.value || '', { responsive: 'resize', paddingtop: 0, paddingbottom: 6 });
+        const w = Math.max(320, els.sheetPreview.clientWidth - 24);
+        ABCJS.renderAbc(els.sheetPreview, els.sheetAbc.value || '', { staffwidth: w, scale: 1.4, paddingtop: 8, paddingbottom: 12, paddingleft: 0, paddingright: 0 });
       } catch (e) { /* abcjs ist fehlertolerant */ }
     }
     function openSheetModal(entry) {
@@ -3973,7 +3974,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       els.sheetToolbar.style.display = editable ? '' : 'none';
       els.sheetTitle.textContent = (entry.title && entry.type !== 'heading') ? 'Noten — ' + entry.title : 'Noten';
       els.sheetModal.hidden = false;
-      renderSheetPreview();
+      requestAnimationFrame(renderSheetPreview); // erst nach Layout rendern (korrekte Breite)
       setTimeout(() => { (editable ? els.sheetAbc : els.sheetCancel).focus(); }, 0);
     }
     function closeSheetModal() {
@@ -4004,7 +4005,8 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         return;
       }
       try {
-        const visual = ABCJS.renderAbc(els.sheetPreview, els.sheetAbc.value || '', { responsive: 'resize' })[0];
+        const w = Math.max(320, els.sheetPreview.clientWidth - 24);
+        const visual = ABCJS.renderAbc(els.sheetPreview, els.sheetAbc.value || '', { staffwidth: w, scale: 1.4 })[0];
         if (!sheetAudioCtx) sheetAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (sheetAudioCtx.state === 'suspended') await sheetAudioCtx.resume();
         if (sheetSynth) { try { sheetSynth.stop(); } catch (e) {} }

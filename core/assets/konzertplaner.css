@@ -612,21 +612,22 @@ body.edit-mode .entry-status-label { display: none; }
 }
 .sheet-toolbar button:hover { border-color: var(--accent); }
 .sheet-tb-sep { width: 1px; align-self: stretch; background: var(--border); margin: 2px 4px; }
-.sheet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+/* Gestapelt: Eingabe oben, großes Notenbild darunter in voller Breite */
+.sheet-grid { display: flex; flex-direction: column; gap: 12px; }
 .sheet-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
 .sheet-abc {
   width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px; line-height: 1.5;
   padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
-  background: var(--input-bg); color: var(--text); resize: vertical; min-height: 200px;
+  background: var(--input-bg); color: var(--text); resize: vertical; min-height: 120px;
 }
 .sheet-abc:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
 .sheet-abc[readonly] { background: var(--panel); cursor: default; }
-/* abcjs zeichnet schwarze Noten → helle Fläche, damit sie auf dem dunklen UI sichtbar sind */
+/* abcjs zeichnet schwarze Noten → helle Fläche in voller Breite, damit sie groß & gut lesbar sind */
 .sheet-preview {
   background: #fff; border: 1px solid var(--border); border-radius: 6px;
-  padding: 8px 10px; min-height: 200px; overflow: auto;
+  padding: 10px 12px; min-height: 150px; overflow: auto;
 }
 .sheet-play-btn { margin-top: 8px; }
 .sheet-help { margin-top: 8px; font-size: 12px; color: var(--muted); }

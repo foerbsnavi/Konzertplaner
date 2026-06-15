@@ -1,7 +1,14 @@
 {
-    "version": "1.11.0",
+    "version": "1.11.1",
     "date": "2026-06-15",
     "changelog": [
+        {
+            "version": "1.11.1",
+            "date": "2026-06-15",
+            "changes": [
+                "Noten-Editor: Das Notenbild wird jetzt in voller Breite und deutlich größer angezeigt — vorher war die Vorschau viel zu klein und kaum lesbar."
+            ]
+        },
         {
             "version": "1.11.0",
             "date": "2026-06-15",
