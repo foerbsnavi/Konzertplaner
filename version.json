@@ -1,7 +1,14 @@
 {
-    "version": "1.9.0",
+    "version": "1.9.1",
     "date": "2026-06-15",
     "changelog": [
+        {
+            "version": "1.9.1",
+            "date": "2026-06-15",
+            "changes": [
+                "Fehler behoben: Im Einstellungs-Fenster ragten die Probetermine über den Rand hinaus (horizontales Scrollen) — Datum und Notiz teilen sich die Breite jetzt sauber. Außerdem einheitlicheres Aussehen der Auswahl-Menüs (u. a. der neuen Freigabe-Berechtigung)."
+            ]
+        },
         {
             "version": "1.9.0",
             "date": "2026-06-15",

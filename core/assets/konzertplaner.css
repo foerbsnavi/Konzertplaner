@@ -879,6 +879,26 @@ body.marker-edit .marker-hint { display: inline; }
   outline-offset: 2px;
 }
 
+/* Globales, einheitliches Dropdown-Aussehen (Freigabe-Auswahl u. a.).
+   Die kompakte Auto-Play-Auswahl behält über ihre eigene Regel ihren Look. */
+select {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+/* Im Einstellungs-Modal volle Breite wie die übrigen Felder */
+#meta-form select { width: 100%; }
+
 /* Marker-Farblegende */
 .marker-legend {
   display: flex;
@@ -1468,7 +1488,7 @@ body:not(.edit-mode) .track-slot.empty { display: none; }
 .meta-fs > label:last-of-type { margin-bottom: 0; }
 #concert-form input,
 #concert-form textarea,
-#meta-form input,
+#meta-form input:not(.rehearsal-date):not(.rehearsal-note),
 #meta-form textarea {
   font: inherit;
   font-size: 14px;
