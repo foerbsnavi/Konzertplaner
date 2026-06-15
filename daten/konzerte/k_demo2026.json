@@ -1,0 +1,111 @@
+{
+    "id": "k_demo2026",
+    "group_id": "k_demo2026",
+    "is_starred": true,
+    "name": "Beispielkonzert",
+    "date": "2026-09-19T19:30",
+    "description": "Ein Demo-Konzert zum Ausprobieren: Einträge verschieben, Abschnitte anlegen, eigene Tracks hochladen. Kann jederzeit gelöscht werden.",
+    "rehearsals": [
+        {
+            "id": "p_demo000001",
+            "date": "2026-09-12T18:00",
+            "note": "Generalprobe im Saal"
+        }
+    ],
+    "entries": [
+        {
+            "id": "e_demo000001",
+            "type": "heading",
+            "title": "1. Set",
+            "notes": "",
+            "track": null,
+            "track_live": null,
+            "note_files": [],
+            "manual_duration": 0,
+            "anchored_to_next": false,
+            "status": 0
+        },
+        {
+            "id": "e_demo000002",
+            "type": "",
+            "title": "Eröffnungsstück",
+            "notes": "Lade über den Track-Pool eigene MP3s hoch und ziehe sie auf die Slots Original oder Live.",
+            "track": null,
+            "track_live": null,
+            "note_files": [],
+            "manual_duration": 210,
+            "anchored_to_next": true,
+            "status": 100
+        },
+        {
+            "id": "e_demo000003",
+            "type": "",
+            "title": "Zweites Stück (direkter Übergang)",
+            "notes": "Dieser Eintrag ist mit dem vorherigen verankert — beide bleiben beim Verschieben zusammen.",
+            "track": null,
+            "track_live": null,
+            "note_files": [],
+            "manual_duration": 185,
+            "anchored_to_next": false,
+            "status": 50
+        },
+        {
+            "id": "e_demo000004",
+            "type": "heading",
+            "title": "Pause",
+            "notes": "",
+            "track": null,
+            "track_live": null,
+            "note_files": [],
+            "manual_duration": 0,
+            "anchored_to_next": false,
+            "status": 0
+        },
+        {
+            "id": "e_demo000005",
+            "type": "heading",
+            "title": "2. Set",
+            "notes": "",
+            "track": null,
+            "track_live": null,
+            "note_files": [],
+            "manual_duration": 0,
+            "anchored_to_next": false,
+            "status": 0
+        },
+        {
+            "id": "e_demo000006",
+            "type": "",
+            "title": "Ballade",
+            "notes": "Über das Dropdown rechts setzt du den Bearbeitungsstand (10 % bis 100 %).",
+            "track": null,
+            "track_live": null,
+            "note_files": [],
+            "manual_duration": 240,
+            "anchored_to_next": false,
+            "status": 30
+        },
+        {
+            "id": "e_demo000007",
+            "type": "",
+            "title": "Finale",
+            "notes": "",
+            "track": null,
+            "track_live": null,
+            "note_files": [],
+            "manual_duration": 300,
+            "anchored_to_next": false,
+            "status": 10
+        }
+    ],
+    "durations": [],
+    "marker_labels": {
+        "yellow": "Gelb",
+        "red": "Rot",
+        "green": "Grün",
+        "blue": "Blau",
+        "purple": "Lila"
+    },
+    "created_at": 1781280000,
+    "updated_at": 1781280000
+}

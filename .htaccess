@@ -1,0 +1,32 @@
+# Konzertplaner — Security-Header (Installations-Wurzel)
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+  # HSTS nur aktivieren wenn die Domain dauerhaft HTTPS bleibt:
+  # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
+# Verhindern, dass Index- und Temp-Dateien direkt abrufbar sind
+# (FilesMatch greift auf den Dateinamen; die Datenordner haben zusätzlich eigene Deny-.htaccess)
+<FilesMatch "(_index\.json|\.tmp)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+# Caching: HTML/PHP nicht, Assets ja
+<IfModule mod_expires.c>
+  ExpiresActive on
+  ExpiresByType image/svg+xml "access plus 7 days"
+  ExpiresByType image/png "access plus 7 days"
+  ExpiresByType image/x-icon "access plus 7 days"
+  ExpiresByType text/css "access plus 1 day"
+  ExpiresByType application/javascript "access plus 1 day"
+  ExpiresByType audio/mpeg "access plus 30 days"
+</IfModule>

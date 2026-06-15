@@ -1,0 +1,5 @@
+# Konzertplaner: Datenordner — kein Verzeichnis-Listing.
+# Zugriffsschutz im Detail regeln die Unterordner selbst:
+# konzerte/ und tracks_meta/ sperren komplett (Require all denied),
+# tracks/ und notes/ bleiben abrufbar (Player/Noten), aber ohne Script-Ausführung.
+Options -Indexes

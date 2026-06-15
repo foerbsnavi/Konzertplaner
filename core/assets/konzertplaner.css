@@ -1,0 +1,2048 @@
+/* Konzertplaner — Styles */
+
+/* Marken-Schriften (geteilt mit Website & Account-App). Liegen im Paket unter
+   core/assets/fonts/, damit auch die Standalone-Version ohne Internet richtig aussieht. */
+@font-face { font-family: "Roboto";  src: url("fonts/Roboto-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Roboto";  src: url("fonts/Roboto-Bold.ttf")    format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Raleway"; src: url("fonts/Raleway-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Raleway"; src: url("fonts/Raleway-Bold.ttf")    format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+
+:root {
+  /* Konzertplaner Dark — durchgängig mit Webseite & Account-App.
+     Tiefes Navy #0f1422, Panels #19213a, Marken-Blau #5b8def, Raleway/Roboto. */
+  --bg: #0f1422;            /* Seitenhintergrund */
+  --panel: #19213a;         /* Karten, Panels, Kopfzeile, Eingaben */
+  --border: #2a3354;        /* dezente Trennlinien (rein dekorativ) */
+  --border-strong: #6276b0; /* sichtbare UI-Grenzen (Buttons/Felder) — 3:1 auf Panel & Slate (WCAG 1.4.11) */
+  --text: #e7ecf6;
+  --muted: #9aa4bd;
+  --navy: #2f3a5e;          /* Slate-Badge (Track-Nummer) — sichtbar auf dunklem Panel */
+  --accent: #5b8def;        /* Marken-Blau (Flächen/Füllungen, weißer Text darauf) */
+  --accent-hover: #6f9bf2;
+  --accent-ink: #8fb0f5;    /* helles Blau für blauen TEXT auf dunkel */
+  --accent-soft: rgba(91,141,239,0.18);
+  --accent-soft-2: rgba(91,141,239,0.10);
+  --danger: #ef5a52;
+  --danger-soft: rgba(239,90,82,0.16);
+  --drop-strong: #5b8def;
+  --wave-bg: #34406b;       /* ungespielte Wellenform auf dunklem Panel */
+  --wave-fg: #5b8def;       /* gespielter Teil im Marken-Blau */
+  --edit: #46c98a;          /* Bearbeitungs-Grün auf dunkel */
+  --edit-hover: #5fd89b;
+  --edit-soft: rgba(70,201,138,0.16);
+  --slate-200: #202a47;     /* dunkle Hover-Fläche */
+  --shadow-rgb: 0, 0, 0;    /* dunkle Schatten */
+  --input-bg: #202a47;
+  --font-body: "Roboto", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --font-heading: "Raleway", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-body);
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+header h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.total {
+  font-size: 14px;
+  color: var(--muted);
+}
+.total strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.spacer { flex: 1; }
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 10px 18px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+button:hover { background: var(--bg); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary {
+  background: #3a5fc4;
+  color: #fff;
+  border-color: var(--accent);
+}
+button.primary:hover { background: #2f4fa0; }
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  padding: 4px 8px;
+}
+button.ghost:hover { color: var(--text); background: var(--slate-200); }
+/* Outline-Button: transparent mit Rand — gleiche Form wie alle Buttons.
+   Für „+ Track" und „+ Text" (sekundäre, gleichwertige Aktionen). */
+button.outline {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+button.outline:hover { background: var(--slate-200); border-color: var(--accent-ink); }
+button.danger { color: var(--danger); border-color: transparent; background: transparent; }
+button.danger:hover { background: var(--danger-soft); }
+
+/* Bearbeitungsmodus-Toggle — in beiden Zuständen („Bearbeiten" / „Bearbeiten
+   beenden") optisch identisch: durchgängig Grün (= Bearbeitungs-Akzent).
+   Dunkler Text auf hellem Grün ergibt 7.7:1 (WCAG AA) — weißer Text auf diesem
+   Grün käme nur auf 2.4:1. Nur das Label wechselt je nach Modus. */
+#edit-toggle {
+  background: var(--edit);
+  color: var(--bg);
+  border-color: var(--edit);
+  font-weight: 600;
+}
+#edit-toggle:hover { background: var(--edit-hover); }
+#edit-toggle .toggle-label-on  { display: none; }
+#edit-toggle .toggle-label-off { display: inline; }
+body.edit-mode #edit-toggle .toggle-label-on  { display: inline; }
+body.edit-mode #edit-toggle .toggle-label-off { display: none; }
+
+
+main { padding: 16px 16px 180px; max-width: 900px; margin: 0 auto; }
+
+.status {
+  font-size: 12px;
+  color: var(--text);
+  min-width: 80px;
+  text-align: right;
+}
+
+#entries { display: flex; flex-direction: column; gap: 6px; }
+.entry {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: 10px;
+  align-items: start;
+}
+.entry.dragging { opacity: 0.4; }
+
+/* ---------- Abschnitts-Überschrift ---------- */
+.entry.heading {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  border-bottom: 2px solid var(--accent);
+  padding: 4px 0 4px 0;
+  margin-top: 22px;        /* deutlicher Abstand nach oben für Sektions-Trennung */
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.entry.heading:first-child { margin-top: 0; }
+.entry.heading.is-playing,
+.entry.heading.drop-above,
+.entry.heading.drop-below { box-shadow: none; }   /* Karten-Effekte deaktivieren */
+.entry.heading.drop-above { box-shadow: 0 -3px 0 0 var(--drop-strong); }
+.entry.heading.drop-below { box-shadow: 0 3px 0 0 var(--drop-strong); }
+.entry.heading > .handle { padding-top: 0; }
+.heading-title {
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text);
+  padding: 4px 4px;
+  border-radius: 4px;
+  min-width: 0;
+  width: 100%;
+  letter-spacing: 0.01em;
+}
+.heading-title::placeholder { color: var(--muted); font-weight: 500; font-style: italic; }
+.heading-title:hover:not([readonly]) { background: var(--bg); }
+.heading-title:focus { outline: 2px solid var(--accent); background: var(--input-bg); }
+.heading-title[readonly] { cursor: default; }
+
+/* Lese-Modus: Heading ohne Handle/Actions, Titel als reiner Text */
+body:not(.edit-mode) .entry.heading {
+  grid-template-columns: 1fr;
+}
+body:not(.edit-mode) .heading-title {
+  color: var(--text);
+  pointer-events: none;
+  user-select: text;
+  cursor: default;
+}
+/* Leere Heading im Lese-Modus komplett ausblenden (Platzhalter würde sonst Lücke verursachen). */
+body:not(.edit-mode) .entry.heading:has(.heading-title:placeholder-shown) {
+  display: none;
+}
+
+.entry.drop-above { box-shadow: 0 -3px 0 0 var(--drop-strong); }
+.entry.drop-below { box-shadow: 0 3px 0 0 var(--drop-strong); }
+.entry.track-drop { background: var(--accent-soft); border-color: var(--drop-strong); }
+
+/* ---------- Anker zwischen zwei Einträgen ---------- */
+/* Im Edit-Modus: Toggle-Button auf der Berührungslinie zwischen den Karten.
+   - data-anchored="0": Karten stehen mit ihrem normalen flex-gap auseinander, Button sitzt mittig drin.
+   - data-anchored="1": Karten kleben aneinander (negative Margins kompensieren den flex-gap),
+     Button liegt zur Hälfte auf jeder Karte (überlappt). */
+.anchor-gap {
+  position: relative;
+  height: 0;                      /* nimmt selbst keinen vertikalen Platz */
+}
+.anchor-gap[data-anchored="1"] {
+  margin-top: -6px;
+  margin-bottom: -6px;
+}
+.anchor-toggle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 28px;
+  height: 18px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0.3;
+  transition: background 80ms, color 80ms, border-color 80ms, box-shadow 80ms, opacity 150ms;
+}
+.anchor-toggle:hover,
+.anchor-toggle:focus-visible { opacity: 1; }
+.anchor-toggle:hover {
+  background: var(--accent-soft-2);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.anchor-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.anchor-toggle .icon { width: 14px; height: 18px; }
+.anchor-gap[data-anchored="1"] .anchor-toggle {
+  background: var(--panel);
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), 0.18);
+}
+
+/* Lese-Modus: Anker-Buttons ohne Anker komplett ausblenden;
+   gesetzte Anker bleiben sichtbar, aber dekorativ (kein Klick). */
+body:not(.edit-mode) .anchor-gap[data-anchored="0"] {
+  display: none;
+}
+body:not(.edit-mode) .anchor-gap[data-anchored="1"] .anchor-toggle {
+  pointer-events: none;
+}
+
+/* Aktuell spielender Track: farbig hinterlegt */
+.entry.is-playing {
+  background: var(--accent-soft);
+  border-color: var(--drop-strong);
+  box-shadow: inset 4px 0 0 0 var(--accent);
+}
+.entry.is-playing .track-slot {
+  background: var(--panel);
+  border-style: solid;
+  border-color: var(--drop-strong);
+}
+
+.handle {
+  cursor: grab;
+  color: var(--muted);
+  user-select: none;
+  text-align: center;
+  padding-top: 6px;
+  line-height: 1;
+  border-radius: 4px;
+}
+.handle:hover { color: var(--text); background: var(--bg); }
+.handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.handle:active { cursor: grabbing; }
+
+.entry-body { min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+.entry-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.entry-index {
+  background: var(--navy);
+  color: #fff;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  font-variant-numeric: tabular-nums;
+}
+.entry-title {
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  font-size: 15px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.entry-title:hover:not([readonly]) { background: var(--bg); }
+.entry-title:focus { outline: 2px solid var(--accent); background: var(--input-bg); }
+.entry-title[readonly] { cursor: default; }
+
+.entry-dur-inline {
+  color: var(--muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  margin-left: auto;   /* Spieldauer ans rechte Ende der Zeile schieben */
+}
+.entry-dur-inline:empty { display: none; }
+
+/* Song-Status: Dropdown im Edit-Modus, Text-Badge im Lese-Modus.
+   Beide Elemente sind immer im DOM, CSS regelt die Sichtbarkeit. */
+body:not(.edit-mode) .entry-status { display: none; }
+body.edit-mode .entry-status-label { display: none; }
+.entry-status-label[data-value="0"] { display: none; }
+
+.entry-status {
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--muted);
+  max-width: 160px;
+  cursor: pointer;
+}
+.entry-status:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* Visuelle Stufung: je höher der Status, desto "grüner"/aktiver */
+.entry-status[data-value="0"]   { color: var(--muted); }
+.entry-status[data-value="10"]  { color: var(--muted); }
+.entry-status[data-value="20"]  { color: var(--muted); }
+.entry-status[data-value="30"]  { color: #e9a23d; border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.10); }
+.entry-status[data-value="40"]  { color: #e9a23d; border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.10); }
+.entry-status[data-value="50"]  { color: var(--accent-ink); border-color: rgba(91,141,239,0.3); background: var(--accent-soft-2); }
+.entry-status[data-value="80"]  { color: var(--edit); border-color: rgba(45,202,114,0.3); background: var(--edit-soft); }
+.entry-status[data-value="100"] { color: var(--edit); border-color: rgba(45,202,114,0.4); background: var(--edit-soft); font-weight: 600; }
+
+.entry-status-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--muted);
+  white-space: nowrap;
+  font-weight: 500;
+}
+.entry-status-label[data-value="30"],
+.entry-status-label[data-value="40"]  { color: #e9a23d; background: rgba(245,158,11,0.10); }
+.entry-status-label[data-value="50"]  { color: var(--accent-ink); background: var(--accent-soft-2); }
+.entry-status-label[data-value="80"]  { color: var(--edit); background: var(--edit-soft); }
+.entry-status-label[data-value="100"] { color: var(--edit); background: var(--edit-soft); font-weight: 700; }
+
+.track-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);   /* solide = belegter, "fertiger" Slot */
+  border-radius: 6px;
+  background: var(--slate-200);       /* dezent vom Karten-Panel abgesetzt */
+  min-height: 32px;
+  font-size: 13px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+/* Leerer Slot = eindeutige Drop-Zone mit Platzhalter statt Badge im Nichts */
+.track-slot.empty {
+  border: 1px dashed var(--border);
+  background: transparent;
+  min-height: 30px;
+  opacity: 0.75;
+}
+.track-slot.empty:hover {
+  opacity: 1;
+  border-color: var(--accent);
+  background: var(--accent-soft-2);
+}
+.track-slot.empty .track-name::after {
+  content: "leer — Track hierher ziehen";
+  color: var(--muted);
+  font-style: italic;
+  font-size: 12px;
+}
+/* Track-Verschiebe-Griff dezent (≥3:1), erst bei Hover voll sichtbar */
+.track-slot .handle { opacity: 0.7; }
+.track-slot:hover .handle,
+.track-slot .handle:focus-visible { opacity: 1; }
+
+/* ---------- Slot-Farbpunkt (am Slot) + Slot-Editor (Angaben-Modal) ---------- */
+.slot-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+.slot-dot[data-color="blue"],   .slot-color-btn[data-color="blue"]   { background: #5b8def; }
+.slot-dot[data-color="green"],  .slot-color-btn[data-color="green"]  { background: #46c98a; }
+.slot-dot[data-color="amber"],  .slot-color-btn[data-color="amber"]  { background: #e9a23d; }
+.slot-dot[data-color="purple"], .slot-color-btn[data-color="purple"] { background: #a78bfa; }
+.slot-dot[data-color="red"],    .slot-color-btn[data-color="red"]    { background: #ef5a52; }
+
+.slot-hint { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+.slot-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.slot-colors { display: flex; gap: 4px; flex: 0 0 auto; }
+.slot-color-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.slot-color-btn.is-active { border-color: var(--text); }
+.slot-color-btn:disabled { cursor: default; opacity: 0.6; }
+/* Heller Fokusring — der Akzent-Ring würde auf dem blauen Button verschwinden */
+.slot-color-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.slot-name { flex: 1 1 auto; min-width: 0; }
+.slot-remove { flex: 0 0 auto; }
+.track-title-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  overflow: hidden;
+}
+.track-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+.track-slot > .track-name { flex: 1 1 auto; }
+.track-dur-inline {
+  color: var(--muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.track-dur {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.play-btn {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.play-btn:hover { color: var(--accent-hover); background: var(--accent-soft-2); }
+.play-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.notes {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+  min-height: 34px;
+  background: var(--accent-soft-2);
+  color: var(--text);
+}
+.notes:focus { outline: 2px solid var(--accent); background: var(--input-bg); }
+.notes[readonly] { background: var(--panel); cursor: default; }
+
+.manual-dur {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.manual-dur input {
+  width: 64px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  background: var(--input-bg);
+}
+.manual-dur input:focus { outline: 2px solid var(--accent); }
+.manual-dur input[readonly] { background: var(--bg); cursor: default; }
+
+.note-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+.note-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent-soft);
+  border: 1px solid var(--drop-strong);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.note-file a { color: var(--text); text-decoration: none; }
+.note-file a:hover { text-decoration: underline; }
+.note-file button {
+  border: none;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+.note-file button:hover { background: var(--danger-soft); border-radius: 3px; }
+.note-file button:focus-visible { outline: 2px solid var(--danger); outline-offset: 1px; }
+
+.upload-btn {
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px dashed var(--border);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.upload-btn:hover { color: var(--text); border-color: var(--accent); }
+.upload-btn:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Eintrags-Aktionen (Kopieren/Löschen) als kompakte Gruppe oben rechts —
+   nebeneinander, damit der Löschen-Knopf nicht optisch auf der Track-Zeile sitzt. */
+.entry-actions { display: flex; flex-direction: row; gap: 2px; align-self: start; }
+.entry-actions .danger { color: var(--muted); }
+.entry-actions .danger:hover { color: var(--danger); background: var(--danger-soft); }
+
+/* Icons (Inline-SVG) */
+.icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.icon-lg { width: 16px; height: 16px; }
+button .icon { pointer-events: none; }
+
+/* Audio-Player (Wavesurfer) */
+#player {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  padding: 8px 16px 10px;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 20;
+  box-shadow: 0 -2px 10px rgba(var(--shadow-rgb), 0.08);
+}
+#player.active { display: flex; }
+#player-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#now-playing {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+#player-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 86px;
+  text-align: right;
+}
+#waveform-wrap {
+  position: relative;
+  width: 100%;
+  min-height: 44px;
+}
+#waveform {
+  width: 100%;
+  min-height: 44px;
+  cursor: pointer;
+}
+body.marker-edit #waveform { cursor: crosshair; }
+
+/* Marker-Overlay über der Waveform.
+   Wavesurfer rendert in einem Shadow-DOM innerhalb #waveform — ohne expliziten
+   z-index landet das Overlay unter dem Wave-Canvas. Daher z-index:2.
+   Normal: pointer-events:none, damit Klicks zur Wave durchgehen (Seek).
+   Edit-Modus: Overlay fängt Klicks ab → neuer Marker. */
+#marker-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+body.marker-edit #marker-overlay { pointer-events: auto; cursor: crosshair; }
+
+/* Marker-Farb-Variablen (Wave-Linie + Handle) */
+.wave-marker[data-color="yellow"] { --mc: #f59e0b; --mc-dark: #d97706; }
+.wave-marker[data-color="red"]    { --mc: #ef4444; --mc-dark: #b91c1c; }
+.wave-marker[data-color="green"]  { --mc: #10b981; --mc-dark: #047857; }
+.wave-marker[data-color="blue"]   { --mc: #0ea5e9; --mc-dark: #0369a1; }
+.wave-marker[data-color="purple"] { --mc: #8b5cf6; --mc-dark: #6d28d9; }
+
+.wave-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--mc, #f59e0b);
+  pointer-events: auto;
+}
+.wave-marker::before {
+  /* Größere Hit-Area für Touch */
+  content: '';
+  position: absolute;
+  inset: 0 -10px;
+}
+body.marker-edit .wave-marker { cursor: ew-resize; background: var(--mc-dark, #d97706); }
+
+.wave-marker .wm-handle {
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--mc, #f59e0b);
+  border: 2px solid var(--panel);
+  color: var(--panel);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.wave-marker .wm-handle::before {
+  /* Unsichtbar vergrößerte Hit-Area: 24px sichtbar + 10px Rand ≈ 44px Touch-Ziel (WCAG 2.5.5) */
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+.wave-marker .wm-handle svg { width: 10px; height: 10px; }
+body.marker-edit .wave-marker .wm-handle { display: inline-flex; }
+.wave-marker .wm-handle:hover { background: var(--mc-dark, #d97706); }
+
+/* Tooltip (Hover im Normal-Modus) */
+.wave-marker .wm-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  white-space: normal;
+  max-width: 240px;
+  width: max-content;
+  box-shadow: 0 4px 12px rgba(var(--shadow-rgb), 0.15);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 5;
+}
+.wave-marker:hover .wm-tooltip,
+.wave-marker:focus-within .wm-tooltip,
+.wave-marker.is-touch-show .wm-tooltip { opacity: 1; }
+body.marker-edit .wave-marker .wm-tooltip { display: none; }
+
+/* 10-Sekunden-Ahead-Toast über der Wave */
+.marker-ahead {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #3a5fc4;
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  max-width: 80%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+  z-index: 6;
+}
+.marker-ahead.is-visible { opacity: 1; }
+.marker-ahead-count {
+  display: inline-block;
+  margin-right: 6px;
+  background: rgba(var(--shadow-rgb),0.25);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+/* Marker-Toggle aktiv */
+#marker-toggle[aria-pressed="true"] {
+  background: rgba(245,158,11,0.15);
+  border-color: #e9a23d;
+  color: #e9a23d;
+}
+#marker-toggle[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+.marker-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: auto;
+  display: none;
+}
+body.marker-edit .marker-hint { display: inline; }
+
+/* Marker-Modal narrow */
+.modal-inner-narrow { width: min(380px, 100%); }
+.marker-time-line {
+  font-size: 13px;
+  color: var(--muted);
+}
+.marker-time-line strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-left: 4px;
+}
+/* Farb-Picker im Marker-Modal */
+.marker-color-fs {
+  border: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+.marker-color-fs legend {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 0 0 4px;
+}
+.marker-color-row {
+  display: flex;
+  gap: 8px;
+}
+.marker-color-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 2px solid var(--border);
+  padding: 0;
+  cursor: pointer;
+  transition: transform 80ms, box-shadow 80ms, border-color 80ms;
+}
+.marker-color-btn[data-color="yellow"] { background: #f59e0b; }
+.marker-color-btn[data-color="red"]    { background: #ef4444; }
+.marker-color-btn[data-color="green"]  { background: #10b981; }
+.marker-color-btn[data-color="blue"]   { background: #0ea5e9; }
+.marker-color-btn[data-color="purple"] { background: #8b5cf6; }
+.marker-color-btn:hover { transform: scale(1.08); }
+.marker-color-btn.is-active {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--panel) inset, 0 1px 3px rgba(var(--shadow-rgb), 0.25);
+}
+.marker-color-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+#player-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#player-controls button {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+#player-prev,
+#player-next {
+  padding: 4px 8px;
+}
+#player-prev:disabled,
+#player-next:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Auto-Play-Einstellung (aus / Original / Live) */
+.autoplay-ctrl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.autoplay-ctrl select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.autoplay-ctrl select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Marker-Farblegende */
+.marker-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.legend-item[data-color="yellow"] .legend-dot { background: #f59e0b; }
+.legend-item[data-color="red"] .legend-dot    { background: #ef4444; }
+.legend-item[data-color="green"] .legend-dot  { background: #10b981; }
+.legend-item[data-color="blue"] .legend-dot   { background: #0ea5e9; }
+.legend-item[data-color="purple"] .legend-dot { background: #8b5cf6; }
+
+/* Section-Labels (Probetermine, Pool …) — gescoped statt globalem h2 */
+#rehearsals-heading,
+#pool-heading {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 24px 0 8px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+#pool {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 60px;
+}
+#pool.drop-target { background: var(--accent-soft); border-color: var(--drop-strong); }
+.pool-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: grab;
+  font-size: 13px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.pool-item:hover { background: var(--accent-soft-2); }
+.pool-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pool-item.dragging { opacity: 0.4; }
+.pool-item.is-playing {
+  background: var(--accent-soft);
+  box-shadow: inset 4px 0 0 0 var(--accent);
+}
+.pool-item.is-playing:hover { background: var(--accent-soft); }
+.pool-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--muted);
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* MP3-Upload-Button */
+.upload-tracks-btn {
+  margin-top: 10px;
+  font-size: 13px;
+}
+body:not(.edit-mode) .upload-tracks-btn { display: none; }
+
+/* Upload-Modal: Dropzone */
+.upload-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 16px;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 150ms, background 150ms;
+  color: var(--muted);
+  text-align: center;
+}
+.upload-dropzone:hover,
+.upload-dropzone:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft-2);
+}
+.upload-dropzone.is-drag-over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.upload-dropzone .icon-xl {
+  width: 32px;
+  height: 32px;
+  color: var(--accent);
+}
+.upload-dropzone-text {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Upload-Dateiliste */
+.upload-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+.upload-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: var(--bg);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.upload-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-file-size {
+  color: var(--muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.upload-status {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 8px;
+  white-space: pre-line;
+  min-height: 1em;
+}
+
+/* Marker-Label-Einstellungen im Meta-Modal */
+.marker-labels-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.marker-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.marker-label-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.marker-label-dot[data-color="yellow"] { background: #f59e0b; }
+.marker-label-dot[data-color="red"]    { background: #ef4444; }
+.marker-label-dot[data-color="green"]  { background: #10b981; }
+.marker-label-dot[data-color="blue"]   { background: #0ea5e9; }
+.marker-label-dot[data-color="purple"] { background: #8b5cf6; }
+.marker-label-row input {
+  flex: 1;
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+}
+.marker-label-row input:focus {
+  outline: 2px solid var(--accent);
+  border-color: var(--accent);
+}
+
+/* Lightbox */
+#lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(var(--shadow-rgb), 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+#lightbox[hidden] { display: none; }
+#lightbox-content {
+  max-width: 96vw;
+  max-height: 92vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(var(--shadow-rgb),0.5);
+}
+#lightbox-content img {
+  max-width: 96vw;
+  max-height: 92vh;
+  object-fit: contain;
+  display: block;
+}
+#lightbox-content iframe {
+  width: 90vw;
+  height: 88vh;
+  max-width: 1200px;
+  border: none;
+  display: block;
+}
+#lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  background: var(--panel);
+  color: var(--text);
+  border: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(var(--shadow-rgb),0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+#lightbox-close:hover { background: var(--input-bg); }
+#lightbox-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#lightbox-open-ext {
+  position: absolute;
+  top: 16px;
+  left: 20px;
+  background: var(--panel);
+  color: var(--text);
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 13px;
+  box-shadow: 0 4px 12px rgba(var(--shadow-rgb),0.3);
+}
+#lightbox-open-ext:hover { background: var(--input-bg); }
+#lightbox-open-ext:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Edit-Modus: Sichtbarkeit der Bedien-Elemente */
+/* Im Read-Only-Modus (Default, kein body.edit-mode) sind alle Edit-Bedienelemente versteckt */
+
+body:not(.edit-mode) #add-entry,
+body:not(.edit-mode) #add-heading,
+body:not(.edit-mode) .entry > .handle,
+body:not(.edit-mode) .entry-actions,
+body:not(.edit-mode) .track-slot .handle,
+body:not(.edit-mode) .track-slot .track-remove,
+body:not(.edit-mode) .note-file button,
+body:not(.edit-mode) .upload-btn,
+body:not(.edit-mode) .manual-dur,
+body:not(.edit-mode) #pool-section {
+  display: none !important;
+}
+
+/* Im Read-Only-Modus: Einträge ohne Handle-Spalte und Actions-Spalte */
+body:not(.edit-mode) .entry {
+  grid-template-columns: 1fr;
+}
+
+/* Im Read-Only-Modus: Drag-Verhalten unterbinden */
+body:not(.edit-mode) .pool-item { cursor: default; }
+body:not(.edit-mode) .pool-item:hover { background: transparent; }
+body:not(.edit-mode) .pool-item.is-playing,
+body:not(.edit-mode) .pool-item.is-playing:hover { background: var(--accent-soft); }
+
+/* Im Read-Only-Modus: Notizen ohne Hintergrund/Border */
+body:not(.edit-mode) .notes { background: transparent; border-color: transparent; padding: 0 4px; }
+body:not(.edit-mode) .notes[readonly] { background: transparent; }
+
+/* Im Read-Only-Modus: leere Notizen-Textareas ausblenden */
+body:not(.edit-mode) .notes:placeholder-shown { display: none; }
+
+/* Im Read-Only-Modus: track-slot ohne Border, wenn empty */
+body:not(.edit-mode) .track-slot.empty { display: none; }
+
+@media (max-width: 700px) {
+  .entry { grid-template-columns: 20px 1fr auto; padding: 8px; }
+  header { gap: 8px; }
+  header h1 { font-size: 16px; }
+  /* Detail-Header auf schmalen Screens kompakter, Modus-Badge entfällt
+     (Status wird ohnehin über aria-pressed und die Toggle-Farbe kommuniziert) */
+  .detail-header { padding: 8px 12px; }
+  body.edit-mode .edit-badge { display: none; }
+  .header-main { gap: 8px; }
+  .header-title-block { gap: 8px; }
+  .concert-h1 { font-size: 16px; }
+  /* Buttons werden Icon-Only — Labels über sr-only sichtbar für SR */
+  #meta-edit .btn-label,
+  #edit-toggle .btn-label,
+  #add-entry .btn-label,
+  #add-heading .btn-label {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+  #meta-edit, #edit-toggle, #add-entry { padding: 6px 10px; }
+  .entry-head {
+    flex-wrap: wrap;
+  }
+  .entry-status,
+  .entry-status-label {
+    width: 100%;
+    order: 10;
+    margin-top: 2px;
+  }
+  /* Player-Leiste: Buttons + Auto-Play + Legende passen nicht in eine Zeile —
+     Legende rutscht umbruchfähig in eine eigene Zeile */
+  #player-controls {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .marker-legend {
+    flex-basis: 100%;
+    margin-left: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+    row-gap: 4px;
+  }
+  /* Hinweistext braucht zu viel Platz — auch im Marker-Edit-Modus ausblenden
+     (gleiche Spezifität wie die Einblend-Regel, gewinnt durch spätere Position) */
+  body.marker-edit .marker-hint { display: none; }
+}
+
+/* ============================================================
+   Hauptseite (Konzert-Übersicht)
+   ============================================================ */
+
+.header-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+#concerts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.concert-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.concert-card:hover {
+  border-color: var(--border);
+}
+
+.concert-link {
+  color: inherit;
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  transition: background 0.15s;
+}
+.concert-link:hover {
+  background: var(--accent-soft-2);
+}
+.concert-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.concert-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.concert-name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+}
+.concert-date {
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.concert-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.concert-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.concert-bottom {
+  margin-top: auto;
+}
+.concert-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.concert-actions button { font-size: 12px; padding: 8px 10px; min-height: 36px; }
+
+/* Versionen-Liste */
+.concert-versions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  margin-top: 6px;
+}
+.version-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.version-row:hover { background: var(--accent-soft-2); }
+.version-date {
+  color: var(--muted);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+  flex: 1;
+  min-width: 0;
+}
+.version-date:hover { color: var(--accent); }
+.version-date:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.version-star {
+  background: transparent;
+  border: none;
+  padding: 2px;
+  min-height: auto;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.version-star:hover { color: var(--text); background: transparent; }
+.version-star.is-active { color: #f0c24a; }
+.version-star.is-active:hover { color: #ffd166; background: transparent; }
+.version-delete {
+  background: transparent;
+  border: none;
+  padding: 2px;
+  min-height: auto;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.version-delete:hover { color: var(--danger); background: transparent; }
+.version-delete:disabled { opacity: 0.3; cursor: not-allowed; }
+.version-delete:disabled:hover { color: var(--muted); }
+.version-desc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: italic;
+}
+.version-meta {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.empty-state {
+  background: var(--panel);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-style: italic;
+  grid-column: 1 / -1;
+}
+
+/* Modal "Neues Konzert" */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(var(--shadow-rgb), 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 90;
+  padding: 16px;
+}
+.modal[hidden] { display: none; }
+.modal-inner {
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 20px 22px;
+  width: min(480px, 100%);
+  box-shadow: 0 20px 60px rgba(var(--shadow-rgb),0.3);
+  max-height: 92vh;
+  overflow: auto;
+}
+.modal-inner-wide { width: min(640px, 100%); }
+.meta-fs {
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 12px 14px 14px;
+  margin: 0;
+}
+.meta-fs legend {
+  font-size: 12px;
+  color: var(--accent-ink);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  padding: 0 6px;
+}
+.meta-fs #add-rehearsal { margin-top: 4px; font-size: 12px; }
+.meta-fs textarea { font-family: inherit; }
+.modal-inner h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text);
+}
+#concert-form,
+#meta-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#concert-form label,
+#meta-form label:not(.marker-label-row):not(.share-check) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.meta-fs > label:last-of-type { margin-bottom: 0; }
+#concert-form input,
+#concert-form textarea,
+#meta-form input,
+#meta-form textarea {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  width: 100%;
+}
+#concert-form input:focus,
+#concert-form textarea:focus,
+#meta-form input:focus,
+#meta-form textarea:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+#concert-form textarea,
+#meta-form textarea { resize: vertical; min-height: 60px; }
+/* Checkboxen nicht von der width:100%-Eingabefeld-Regel auf volle Breite ziehen */
+#meta-form input[type="checkbox"] { width: auto; flex: 0 0 auto; }
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Einheitlicher Dialog (kpAlert / kpConfirm) — ersetzt native alert()/confirm().
+   Nutzt .modal + .modal-inner für Overlay und Karte; hier nur Titel- und Text-Feinschliff. */
+.kp-dialog-title[hidden] { display: none; }
+.kp-dialog-msg {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.kp-dialog .modal-actions { margin-top: 18px; }
+
+/* ============================================================
+   Detailseite: Header + Metadaten-Bar + Probetermine
+   ============================================================ */
+
+/* Visually-hidden Utility (für Screenreader sichtbar, optisch nicht) */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0,0,0,0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* ============================================================
+   Detailseite: Header
+   Aufbau:
+   .detail-header (column flex)
+     ├── .header-main (row flex): back-link · title-block · actions
+     │     └── .header-title-block: h1/Name-Input · Desc-Display/Input
+     └── .header-meta-row: Datum · Gesamt · Status
+   Verhalten: alles in einer Zeile, wenn der Platz reicht. Mobile-Breakpoint
+   verkleinert Buttons auf Icons, damit der Header einzeilig bleibt.
+   ============================================================ */
+
+.detail-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 8px 16px;
+}
+
+.header-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+/* Action-Buttons bleiben rechts, auch wenn sie auf eine eigene Zeile umbrechen */
+.header-main > .header-actions { margin-left: auto; }
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 6px;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+.back-link:hover { color: var(--accent); background: var(--accent-soft-2); }
+.back-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Titel-Block (Name + Beschreibung) füllt den freien Raum zwischen
+   Back-Link und Action-Buttons. Titel und Beschreibung dürfen sich
+   eine Zeile teilen; bei Platzmangel rutscht die Beschreibung unter
+   den Titel — die Action-Buttons bleiben dabei aber rechts. */
+.header-title-block {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.header-meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+.header-meta-row .total { color: var(--muted); }
+/* Status rechts in der Meta-Zeile, keine Mindestbreiten-Reservierung */
+.header-meta-row .status { margin-left: auto; min-width: 0; text-align: right; }
+
+/* Punkt-Separator zwischen Datum und Total per ::before — verschwindet
+   automatisch, wenn das Datum-Display leer ist. */
+.header-meta-row .total::before {
+  content: '· ';
+  color: var(--muted);
+}
+.header-meta-row .concert-date-display[data-empty="1"] + .total::before,
+.header-meta-row > .total:first-child::before {
+  content: '';
+}
+
+/* Konzertname: reines Display-Heading. Bearbeitung erfolgt im Meta-Modal. */
+.concert-h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+.concert-name-display {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Einstellungen + Hinzufügen-Buttons: nur im Edit-Modus sichtbar. */
+body:not(.edit-mode) .meta-edit-btn,
+body:not(.edit-mode) .edit-only-btn { display: none; }
+
+/* Beschreibung: nur Display-Span im Header. Bearbeitung im Meta-Modal. */
+.concert-description-display {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+.concert-description-display:empty { display: none; }
+
+
+/* Datum-Anzeige in der Meta-Zeile (Bearbeitung im Modal) */
+.concert-date-display {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+.concert-date-display[data-empty="1"] { display: none; }
+
+/* Probetermine */
+.rehearsals-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.rehearsals-head h2 {
+  margin: 0;
+}
+#rehearsals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rehearsal-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--accent-soft-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.rehearsal-date {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text);
+  flex: 0 0 auto;
+}
+.rehearsal-date:focus { outline: 2px solid var(--accent); }
+.rehearsal-date[readonly] { background: transparent; border-color: transparent; cursor: default; }
+.rehearsal-note {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.rehearsal-note:focus { outline: 2px solid var(--accent); }
+.rehearsal-note[readonly] { background: transparent; border-color: transparent; cursor: default; }
+.rehearsal-empty {
+  font-style: italic;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 6px 4px;
+}
+
+body:not(.edit-mode) #add-rehearsal,
+body:not(.edit-mode) .rehearsal-remove {
+  display: none !important;
+}
+body:not(.edit-mode) .rehearsal-row {
+  background: transparent;
+  border-color: transparent;
+  padding: 2px 0;
+}
+
+@media (max-width: 600px) {
+  .rehearsal-row { flex-wrap: wrap; }
+  .rehearsal-date { flex: 1 1 auto; }
+}
+
+/* ============================================================
+   Print-Stylesheet: Konzertablauf druckfreundlich
+   ============================================================ */
+@media print {
+  body { background: #fff; color: #000; font-size: 11pt; }
+  header,
+  #player,
+  #lightbox,
+  .modal,
+  .back-link,
+  .entry-actions,
+  .meta-edit-btn,
+  .play-btn,
+  .track-remove,
+  .upload-btn,
+  .note-files,
+  .manual-dur,
+  #pool-section,
+  #edit-toggle,
+  #add-entry,
+  #add-heading,
+  .handle,
+  .anchor-toggle,
+  .entry-status,
+  .status { display: none !important; }
+  .entry-status-label {
+    color: #000 !important;
+    background: none !important;
+    border: 1px solid #888;
+    padding: 1pt 4pt;
+    font-size: 9pt;
+  }
+
+  /* Anker-Lücken im Druck: ohne Anker = unsichtbar, mit Anker = dünne schwarze Linie */
+  .anchor-gap { display: none; }
+  .anchor-gap[data-anchored="1"] {
+    display: block;
+    height: 8pt;
+    margin: -2pt 0;
+    position: relative;
+    page-break-inside: avoid;
+  }
+  .anchor-gap[data-anchored="1"]::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1pt;
+    background: #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  main { padding: 0; max-width: none; }
+
+  /* Konzertname als Druck-Titel oben einblenden, falls vorhanden */
+  body.view-detail::before {
+    content: attr(data-print-title);
+    display: block;
+    font-size: 18pt;
+    font-weight: 700;
+    margin: 0 0 4pt;
+  }
+  body.view-detail::after {
+    content: attr(data-print-meta);
+    display: block;
+    font-size: 10pt;
+    color: #444;
+    margin: 0 0 12pt;
+    border-bottom: 1px solid #888;
+    padding-bottom: 6pt;
+  }
+
+  .entry {
+    page-break-inside: avoid;
+    border: none;
+    border-radius: 0;
+    border-bottom: 1px solid #ddd;
+    padding: 6pt 0;
+    background: none !important;
+    box-shadow: none !important;
+    grid-template-columns: 1fr;
+  }
+  .entry.heading {
+    border: none;
+    border-bottom: 2pt solid #000;
+    margin-top: 14pt;
+    padding: 2pt 0 2pt 0;
+  }
+  .heading-title {
+    color: #000 !important;
+    font-size: 13pt;
+    font-weight: 700;
+  }
+  .entry-head { gap: 6pt; }
+  .entry-index {
+    background: none;
+    color: #000;
+    font-weight: 700;
+    padding: 0;
+    border: 1px solid #000;
+    width: 22pt;
+    text-align: center;
+  }
+  .entry-title { color: #000; padding: 0; font-size: 12pt; }
+  .entry-dur-inline { color: #444; font-size: 10pt; }
+  .track-slot {
+    border: none;
+    padding: 2pt 0 2pt 28pt;
+    color: #333;
+    background: none !important;
+  }
+  .track-name { color: #333; }
+  .track-dur { display: none; }
+  .notes {
+    background: none !important;
+    border: none !important;
+    color: #555;
+    padding: 0 28pt;
+    font-style: italic;
+    font-size: 10pt;
+  }
+
+  /* Eingaben im Druck als Klartext ausgeben */
+  input, textarea {
+    border: none !important;
+    background: none !important;
+    color: inherit !important;
+    padding: 0 !important;
+    outline: none !important;
+  }
+
+  a[href]::after { content: ''; }
+}
+
+/* ============================================================
+   Login-Seite
+   ============================================================ */
+.view-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+.login-wrap {
+  width: 100%;
+  max-width: 380px;
+  padding: 16px;
+}
+.login-box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 28px 24px;
+  box-shadow: 0 4px 24px rgba(var(--shadow-rgb), 0.08);
+}
+.login-box h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 700;
+}
+.login-hint {
+  margin: 0 0 20px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.login-box label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.login-box input {
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  width: 100%;
+}
+.login-box input:focus {
+  outline: 2px solid var(--accent);
+  border-color: var(--accent);
+}
+.login-error {
+  color: var(--danger);
+  font-size: 13px;
+  margin-top: 8px;
+}
+.login-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px;
+  font-size: 14px;
+  justify-content: center;
+}
+
+/* Slot-Label (Original / Live) */
+.slot-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: var(--muted);
+  flex: 0 0 auto;
+  min-width: 52px;        /* Original/Live fluchten als Paar */
+  text-align: center;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: var(--bg);
+  line-height: 1.3;
+}
+.track-slot[data-slot="track_live"] .slot-label {
+  /* dunkler Label-Hintergrund (var(--bg)) bleibt → grüner Text erreicht 8,6:1 (AA);
+     der frühere helle edit-soft-Hintergrund ergab nur 3,35:1. */
+  color: var(--edit);
+}
+.track-slot.track-drop {
+  background: var(--accent-soft);
+  border-color: var(--drop-strong);
+  border-style: solid;
+}
+/* Lese-Modus-Ausblendung leerer Slots steht bereits weiter oben (Duplikat entfernt). */
+
+/* Pool: zugewiesene Tracks */
+.pool-item.pool-in-use .track-name {
+  color: var(--muted);
+}
+
+/* Pool: zugewiesen-Marker */
+.pool-assigned-marker {
+  flex: 0 0 auto;
+  color: var(--edit);
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+}
+.pool-assigned-marker .icon {
+  width: 12px;
+  height: 12px;
+}
+
+/* Pool: Track-Löschen-Button */
+.pool-delete {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+}
+
+/* Logout */
+.logout-btn {
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  text-decoration: none;
+  color: var(--muted);
+}
+.logout-btn:hover {
+  color: var(--text);
+  background: var(--slate-200);
+}
+
+/* App-Fußzeile: Version + Selbst-Update (nur Hauptseite) */
+.app-footer {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 8px 16px 32px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+.app-footer .app-version { font-variant-numeric: tabular-nums; }
+#update-result { color: var(--text); }
+
+/* Freigabe-Ansicht: schreibgeschützt, komplette Bearbeitungs-UI ausgeblendet */
+.share-mode #meta-edit,
+.share-mode #edit-toggle,
+.share-mode #add-entry,
+.share-mode #add-heading,
+.share-mode #marker-toggle,
+.share-mode #pool-section,
+.share-mode .logout-btn { display: none !important; }
+
+.share-badge {
+  background: var(--accent-soft);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Freigabe-Verwaltung im Konzert-Angaben-Modal */
+.share-fs-hint { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+.share-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 9px 11px;
+  background: var(--slate-200);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-weight: 600;
+  color: var(--text);
+}
+.share-url-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.share-url-row input { flex: 1 1 220px; min-width: 0; }
+.share-status { font-size: 13px; color: var(--muted); margin: 8px 0; min-height: 1.2em; }

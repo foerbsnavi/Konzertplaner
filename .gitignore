@@ -1,0 +1,22 @@
+# ── Laufzeit- & Nutzerdaten ───────────────────────────────────────────
+# Entstehen erst beim Betrieb auf dem Server und gehören nicht ins Repo.
+
+# Konfiguration (Passwort-Hash) + interne Schutz-/Sperrdateien
+config/config.php
+config/share_attempts.json
+config/login_attempts.json
+config/.update_backup_*/
+
+# Nutzerdaten: Konzerte (außer Demo), Tracks, Noten, Track-Metadaten
+daten/konzerte/*
+!daten/konzerte/.htaccess
+!daten/konzerte/k_demo2026.json
+daten/tracks/
+daten/notes/
+daten/tracks_meta/
+
+# ── Sonstiges ─────────────────────────────────────────────────────────
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
