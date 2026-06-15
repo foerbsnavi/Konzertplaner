@@ -1,7 +1,14 @@
 {
-    "version": "1.11.2",
+    "version": "1.11.3",
     "date": "2026-06-15",
     "changelog": [
+        {
+            "version": "1.11.3",
+            "date": "2026-06-15",
+            "changes": [
+                "Noten-Editor: Die Noten werden jetzt dunkel und gut sichtbar dargestellt (vorher waren sie auf dem weißen Vorschau-Feld fast unsichtbar). Außerdem erscheint kein zusätzlicher Anlegen-Knopf mehr, wenn bereits eine Notiz oder Noten vorhanden sind — das Bearbeiten läuft dann direkt über das vorhandene Element."
+            ]
+        },
         {
             "version": "1.11.2",
             "date": "2026-06-15",

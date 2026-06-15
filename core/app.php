@@ -4122,14 +4122,16 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         chip.appendChild(rm);
         wrap.appendChild(chip);
       });
-      // „Notizen“-Button (nur im Edit-Modus sichtbar, CSS) — öffnet den Notiz-Editor
-      const noteBtn = document.createElement('button');
-      noteBtn.type = 'button';
-      noteBtn.className = 'upload-btn note-add-btn';
-      noteBtn.innerHTML = icon('i-edit') + ' Notizen';
-      noteBtn.title = 'Notiz schreiben oder bearbeiten';
-      noteBtn.addEventListener('click', () => openNoteModal(entry));
-      wrap.appendChild(noteBtn);
+      // „Notizen“-Button nur, wenn es noch KEINE Notiz gibt (sonst genügt das Chip)
+      if ((entry.notes || '').trim() === '') {
+        const noteBtn = document.createElement('button');
+        noteBtn.type = 'button';
+        noteBtn.className = 'upload-btn note-add-btn';
+        noteBtn.innerHTML = icon('i-edit') + ' Notizen';
+        noteBtn.title = 'Notiz schreiben';
+        noteBtn.addEventListener('click', () => openNoteModal(entry));
+        wrap.appendChild(noteBtn);
+      }
 
       const label = document.createElement('label');
       label.className = 'upload-btn';
@@ -4146,14 +4148,16 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       label.appendChild(inp);
       wrap.appendChild(label);
 
-      // „Noteneditor“-Button (nur im Edit-Modus sichtbar, CSS) — rechts neben „+ Noten“
-      const sheetBtn = document.createElement('button');
-      sheetBtn.type = 'button';
-      sheetBtn.className = 'upload-btn note-sheet-btn';
-      sheetBtn.innerHTML = icon('i-edit') + ' Noteneditor';
-      sheetBtn.title = 'Noten schreiben oder bearbeiten';
-      sheetBtn.addEventListener('click', () => openSheetModal(entry));
-      wrap.appendChild(sheetBtn);
+      // „Noteneditor“-Button nur, wenn es noch KEINE Noten gibt (sonst genügt das Chip)
+      if ((entry.abc || '').trim() === '') {
+        const sheetBtn = document.createElement('button');
+        sheetBtn.type = 'button';
+        sheetBtn.className = 'upload-btn note-sheet-btn';
+        sheetBtn.innerHTML = icon('i-edit') + ' Noteneditor';
+        sheetBtn.title = 'Noten schreiben';
+        sheetBtn.addEventListener('click', () => openSheetModal(entry));
+        wrap.appendChild(sheetBtn);
+      }
 
       return wrap;
     }
