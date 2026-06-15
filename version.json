@@ -1,7 +1,14 @@
 {
-    "version": "1.11.5",
+    "version": "1.11.6",
     "date": "2026-06-15",
     "changelog": [
+        {
+            "version": "1.11.6",
+            "date": "2026-06-15",
+            "changes": [
+                "Wellenform-Player: Farben umgekehrt — die noch nicht gespielte Spur erscheint jetzt im kräftigen Marken-Blau, der bereits abgespielte Teil gedämpft. So sieht man den Fortschritt klarer."
+            ]
+        },
         {
             "version": "1.11.5",
             "date": "2026-06-15",

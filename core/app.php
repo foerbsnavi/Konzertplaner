@@ -4838,8 +4838,8 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       }
       wavesurfer = WaveSurfer.create({
         container: els.waveform,
-        waveColor: getComputedStyle(document.documentElement).getPropertyValue('--wave-bg').trim() || '#bfdbfe',
-        progressColor: getComputedStyle(document.documentElement).getPropertyValue('--wave-fg').trim() || '#1e3a8a',
+        waveColor: getComputedStyle(document.documentElement).getPropertyValue('--wave-bg').trim() || '#5b8def',
+        progressColor: getComputedStyle(document.documentElement).getPropertyValue('--wave-fg').trim() || '#34406b',
         cursorColor: '#1d4ed8',
         barWidth: 2, barGap: 2, barRadius: 1, height: 44,
         backend: 'MediaElement', url: trackUrl(name),

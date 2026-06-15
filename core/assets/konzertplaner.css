@@ -25,8 +25,8 @@
   --danger: #ef5a52;
   --danger-soft: rgba(239,90,82,0.16);
   --drop-strong: #5b8def;
-  --wave-bg: #34406b;       /* ungespielte Wellenform auf dunklem Panel */
-  --wave-fg: #5b8def;       /* gespielter Teil im Marken-Blau */
+  --wave-bg: #5b8def;       /* ungespielte Wellenform im Marken-Blau */
+  --wave-fg: #34406b;       /* gespielter Teil gedämpft auf dunklem Panel */
   --edit: #46c98a;          /* Bearbeitungs-Grün auf dunkel */
   --edit-hover: #5fd89b;
   --edit-soft: rgba(70,201,138,0.16);
