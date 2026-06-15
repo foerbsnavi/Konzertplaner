@@ -385,6 +385,31 @@ function gen_share_token(): string {
     return 'sh_' . bin2hex(random_bytes(20));
 }
 
+// Freigabe-Berechtigung der Betrachter:
+//   'view'    = nur ansehen + abspielen (Standard, abwärtskompatibel)
+//   'markers' = zusätzlich Marker setzen/ändern
+//   'edit'    = zusätzlich das ganze Programm bearbeiten
+function valid_share_permission(string $p): bool {
+    return in_array($p, ['view', 'markers', 'edit'], true);
+}
+function share_permission_of(?array $c): string {
+    $p = (string)(($c['share']['permission'] ?? '') ?: 'view');
+    return valid_share_permission($p) ? $p : 'view';
+}
+
+// In einer Freigabe-Sitzung dürfen Schreibzugriffe nur Einträge des
+// freigegebenen Konzerts betreffen — sonst könnte ein Mitbearbeiter über
+// geratene Entry-IDs in andere (private) Konzerte desselben Besitzers schreiben.
+// Besitzer (eingeloggt) sind nicht eingeschränkt.
+function share_entry_allowed(bool $isLoggedIn, ?array $shareConcert, string $entryId): bool {
+    if ($isLoggedIn || $shareConcert === null) return true;
+    $ids = array_map(
+        static fn($e) => (string)($e['id'] ?? ''),
+        is_array($shareConcert['entries'] ?? null) ? $shareConcert['entries'] : []
+    );
+    return in_array($entryId, $ids, true);
+}
+
 // Sucht das Konzert mit diesem Freigabe-Token (nur aktive Freigaben)
 function find_concert_by_share_token(string $dir, string $token): ?array {
     if (!valid_share_token($token)) return null;
@@ -500,6 +525,7 @@ function share_info_for_owner(array $c): array {
         'enabled'      => !empty($share['enabled']),
         'has_password' => !empty($share['pass_hash']),
         'url'          => $token !== '' ? share_url_for_token($token) : '',
+        'permission'   => share_permission_of($c),
     ];
 }
 
@@ -1184,12 +1210,25 @@ if ($action === 'share_login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 if (!$isLoggedIn) {
     if ($action !== null) {
-        // Freigabe-Sitzungen dürfen NUR lesen — und nur das freigegebene Konzert
-        $shareReadOk = $shareGranted
-            && in_array($action, ['state', 'markers_get'], true)
+        // Freigabe-Sitzungen: erlaubte Aktionen je nach eingestellter Berechtigung —
+        // und immer NUR für das freigegebene Konzert.
+        $sharePerm = $shareGranted ? share_permission_of($shareConcert) : 'view';
+        $shareAllowed = ['state', 'markers_get'];
+        if ($sharePerm === 'markers' || $sharePerm === 'edit') {
+            $shareAllowed[] = 'markers_save';
+        }
+        if ($sharePerm === 'edit') {
+            // track_delete bewusst NICHT: das Löschen aus dem gemeinsamen Track-Pool
+            // beträfe auch andere Konzerte des Besitzers — bleibt Besitzer-Sache.
+            array_push($shareAllowed,
+                'save', 'concert_save_meta', 'entry_duplicate',
+                'upload_track', 'upload_note', 'delete_note');
+        }
+        $shareOk = $shareGranted
+            && in_array($action, $shareAllowed, true)
             && $concertId !== ''
             && $concertId === (string)($shareConcert['id'] ?? '');
-        if (!$shareReadOk) {
+        if (!$shareOk) {
             json_response(['ok' => false, 'error' => 'Nicht angemeldet'], 401);
         }
     }
@@ -1444,6 +1483,11 @@ if ($action === 'concert_save_meta' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!save_concert($CONCERTS_DIR, $c)) {
         json_response(['ok' => false, 'error' => 'Speichern fehlgeschlagen'], 500);
     }
+    // Freigabe-Geheimnis (Token/Hash) nie ausliefern — diese Antwort ist auch
+    // für Mitbearbeiter mit Edit-Freigabe erreichbar. Besitzer bekommt share_info.
+    $shareInfo = share_info_for_owner($c);
+    unset($c['share']);
+    if ($isLoggedIn) $c['share_info'] = $shareInfo;
     json_response(['ok' => true, 'concert' => $c]);
 }
 
@@ -1460,6 +1504,15 @@ if ($action === 'share_update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $enabled    = !empty($body['enabled']);
     $regenerate = !empty($body['regenerate']);
     $password   = (string)($body['password'] ?? '');
+
+    // Berechtigung der Betrachter: view | markers | edit
+    if (isset($body['permission'])) {
+        $perm = (string)$body['permission'];
+        $share['permission'] = valid_share_permission($perm) ? $perm : 'view';
+    }
+    if (empty($share['permission']) || !valid_share_permission((string)$share['permission'])) {
+        $share['permission'] = 'view';
+    }
 
     if ($password !== '') {
         if (strlen($password) < 4) {
@@ -1528,6 +1581,9 @@ if ($action === 'markers_save' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $entryId = (string)($body['entry'] ?? '');
     if (!valid_entry_id($entryId)) {
         json_response(['ok' => false, 'error' => 'Ungültige Eintrags-ID'], 400);
+    }
+    if (!share_entry_allowed($isLoggedIn, $shareConcert, $entryId)) {
+        json_response(['ok' => false, 'error' => 'Nicht freigegeben'], 403);
     }
     $markers = is_array($body['markers'] ?? null) ? $body['markers'] : [];
     if (count($markers) > 200) {
@@ -1609,6 +1665,9 @@ if ($action === 'upload_note' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $entryId = (string)($_POST['entry_id'] ?? '');
     if (!valid_entry_id($entryId)) {
         json_response(['ok' => false, 'error' => 'Ungültige entry_id'], 400);
+    }
+    if (!share_entry_allowed($isLoggedIn, $shareConcert, $entryId)) {
+        json_response(['ok' => false, 'error' => 'Nicht freigegeben'], 403);
     }
     $base    = sanitize_filename(pathinfo($f['name'], PATHINFO_FILENAME));
     if (strlen($base) > 80) $base = substr($base, 0, 80);
@@ -1723,12 +1782,14 @@ if ($action === 'track_delete' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // ---------- View-Routing ----------
 
 $SHARE_MODE = false;
+$SHARE_PERMISSION = 'view';
 if (!$isLoggedIn) {
     if ($shareConcert !== null) {
         if ($shareGranted) {
             $view = 'detail';
             $concertId = (string)$shareConcert['id'];
             $SHARE_MODE = true;
+            $SHARE_PERMISSION = share_permission_of($shareConcert);
         } else {
             $view = 'share_login';
         }
@@ -1760,7 +1821,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
   <?php /* Plattform-Hook: zusätzliche Head-Elemente (z. B. Topbar-Stylesheet) */
         if (function_exists('kp_platform_head_html')) echo kp_platform_head_html(); ?>
 </head>
-<body class="view-<?= htmlspecialchars($view === 'share_login' ? 'login' : $view, ENT_QUOTES, 'UTF-8') ?><?= $SHARE_MODE ? ' share-mode' : '' ?>">
+<body class="view-<?= htmlspecialchars($view === 'share_login' ? 'login' : $view, ENT_QUOTES, 'UTF-8') ?><?= $SHARE_MODE ? ' share-mode share-perm-' . htmlspecialchars($SHARE_PERMISSION, ENT_QUOTES, 'UTF-8') : '' ?>">
 <?php /* Plattform-Hook: gemeinsame Kopfleiste der Online-Plattform */
       if (function_exists('kp_platform_topbar_html')) echo kp_platform_topbar_html(); ?>
   <!-- SVG-Icon-Sprite (versteckt, wird via <use> referenziert) -->
@@ -2363,8 +2424,13 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         <span id="concert-description-display" class="concert-description-display"></span>
       </div>
       <div class="header-actions">
-        <?php if ($SHARE_MODE): ?>
-        <span class="share-badge" title="Du siehst eine schreibgeschützte Freigabe dieses Konzerts">Freigegebenes Programm</span>
+        <?php if ($SHARE_MODE):
+          $shareBadge = $SHARE_PERMISSION === 'edit' ? 'Freigabe · Bearbeiten'
+                      : ($SHARE_PERMISSION === 'markers' ? 'Freigabe · Marker' : 'Freigegebenes Programm');
+          $shareBadgeTitle = $SHARE_PERMISSION === 'edit' ? 'Diese Freigabe erlaubt dir, das Programm zu bearbeiten'
+                      : ($SHARE_PERMISSION === 'markers' ? 'Diese Freigabe erlaubt dir, Marker zu setzen und zu ändern' : 'Du siehst eine schreibgeschützte Freigabe dieses Konzerts');
+        ?>
+        <span class="share-badge" title="<?= htmlspecialchars($shareBadgeTitle, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($shareBadge, ENT_QUOTES, 'UTF-8') ?></span>
         <?php endif; ?>
         <?php /* Buttons bleiben im DOM (JS-Referenzen!), CSS blendet sie im Freigabe-Modus aus */ ?>
         <button id="meta-edit" type="button" class="primary meta-edit-btn"
@@ -2462,10 +2528,18 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         </fieldset>
         <fieldset class="meta-fs share-fs">
           <legend>Freigabe</legend>
-          <p class="share-fs-hint">Teile dieses Konzert schreibgeschützt mit deiner Band: per Link und Passwort, ganz ohne Account für die Betrachter.</p>
+          <p class="share-fs-hint">Teile dieses Konzert mit deiner Band: per Link und Passwort, ganz ohne Account für die Betrachter. Du bestimmst, wie viel sie dürfen.</p>
           <label class="share-check">
             <input type="checkbox" id="share-enabled">
             <span>Freigabe aktiv</span>
+          </label>
+          <label>
+            <span>Was dürfen Betrachter?</span>
+            <select id="share-permission">
+              <option value="view">Nur ansehen &amp; abspielen</option>
+              <option value="markers">Marker setzen &amp; bearbeiten</option>
+              <option value="edit">Das ganze Programm bearbeiten</option>
+            </select>
           </label>
           <label>
             <span>Freigabe-Passwort <small>(leer lassen = unverändert)</small></span>
@@ -2641,8 +2715,13 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       + (SHARE_TOKEN ? '&share=' + encodeURIComponent(SHARE_TOKEN) : '');
     // Browser-Pfad zum Datenordner (Tracks/Noten), vom Einstiegspunkt definiert
     const DATA_URL = <?= json_encode(rtrim(KP_DATA_URL, '/'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    // Freigabe-Ansicht: Betrachter ohne Account, strikt schreibgeschützt
+    // Freigabe-Ansicht: Betrachter ohne Account
     const SHARE_MODE = <?= json_encode($SHARE_MODE) ?>;
+    // Berechtigung der Freigabe: 'view' | 'markers' | 'edit'
+    const SHARE_PERMISSION = <?= json_encode($SHARE_PERMISSION) ?>;
+    // Rechte dieser Sitzung: Besitzer (kein Share) darf alles.
+    const CAN_EDIT_PROGRAM = !SHARE_MODE || SHARE_PERMISSION === 'edit';
+    const CAN_EDIT_MARKERS = !SHARE_MODE || SHARE_PERMISSION === 'edit' || SHARE_PERMISSION === 'markers';
 
     const MARKER_LABEL_DEFAULTS = {yellow:'Gelb', green:'Grün', purple:'Lila', blue:'Blau', red:'Rot'};
     const state = {
@@ -2727,9 +2806,9 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
 
     // ---------- Bearbeitungsmodus ----------
     const EDIT_KEY = 'konzertplaner.edit_mode';
-    function isEditMode() { return !SHARE_MODE && document.body.classList.contains('edit-mode'); }
+    function isEditMode() { return CAN_EDIT_PROGRAM && document.body.classList.contains('edit-mode'); }
     function setEditMode(on, announce) {
-      if (SHARE_MODE) on = false; // Freigabe-Ansicht ist immer schreibgeschützt
+      if (!CAN_EDIT_PROGRAM) on = false; // ohne Bearbeitungsrecht immer schreibgeschützt
       document.body.classList.toggle('edit-mode', on);
       els.editToggle.setAttribute('aria-pressed', on ? 'true' : 'false');
       try { localStorage.setItem(EDIT_KEY, on ? '1' : '0'); } catch (e) {}
@@ -2863,7 +2942,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     let saveTimer = null;
     let savePending = false;
     function save(immediate = false) {
-      if (SHARE_MODE) return; // Freigabe-Ansicht speichert nie
+      if (!CAN_EDIT_PROGRAM) return; // ohne Bearbeitungsrecht nicht speichern
       clearTimeout(saveTimer);
       const doSave = () => {
         savePending = true;
@@ -2886,7 +2965,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
 
     let metaSaveTimer = null;
     function saveMeta() {
-      if (SHARE_MODE) return; // Freigabe-Ansicht speichert nie
+      if (!CAN_EDIT_PROGRAM) return; // ohne Bearbeitungsrecht nicht speichern
       clearTimeout(metaSaveTimer);
       metaSaveTimer = setTimeout(() => {
         flashStatus('Speichere…', 0);
@@ -5142,6 +5221,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     let shareInfo = null;
     const shareEls = {
       enabled:  document.getElementById('share-enabled'),
+      permission: document.getElementById('share-permission'),
       password: document.getElementById('share-password'),
       urlRow:   document.getElementById('share-url-row'),
       url:      document.getElementById('share-url'),
@@ -5155,8 +5235,9 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     }
     function fillShareUi() {
       if (!shareEls.enabled || SHARE_MODE) return;
-      const info = shareInfo || { enabled: false, url: '', has_password: false };
+      const info = shareInfo || { enabled: false, url: '', has_password: false, permission: 'view' };
       shareEls.enabled.checked = !!info.enabled;
+      if (shareEls.permission) shareEls.permission.value = info.permission || 'view';
       shareEls.password.placeholder = info.has_password
         ? 'Passwort gesetzt — leer lassen für unverändert'
         : 'Passwort für Betrachter';
@@ -5188,11 +5269,11 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     }
     if (shareEls.save) {
       shareEls.save.addEventListener('click', () => {
-        shareUpdate({ enabled: shareEls.enabled.checked, password: shareEls.password.value });
+        shareUpdate({ enabled: shareEls.enabled.checked, password: shareEls.password.value, permission: shareEls.permission ? shareEls.permission.value : 'view' });
       });
       shareEls.rotate.addEventListener('click', async () => {
         if (!await kpConfirm('Neuen Link erzeugen?\n\nDer bisherige Link funktioniert dann nicht mehr.')) return;
-        shareUpdate({ enabled: true, regenerate: true, password: shareEls.password.value });
+        shareUpdate({ enabled: true, regenerate: true, password: shareEls.password.value, permission: shareEls.permission ? shareEls.permission.value : 'view' });
       });
       shareEls.copy.addEventListener('click', () => {
         const url = shareEls.url.value;
@@ -5209,7 +5290,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     // Beim Verlassen: anstehende Saves zuverlässig per sendBeacon flushen.
     // Reguläres fetch wird vom Browser beim Unload abgebrochen.
     window.addEventListener('beforeunload', () => {
-      if (SHARE_MODE) return; // Freigabe-Ansicht hat nichts zu flushen
+      if (!CAN_EDIT_MARKERS) return; // ohne Schreibrecht nichts zu flushen
       if (saveTimer)       { clearTimeout(saveTimer);       beaconSaveEntries(); }
       if (metaSaveTimer)   { clearTimeout(metaSaveTimer);   beaconSaveMeta(); }
       if (markerSaveTimer) { clearTimeout(markerSaveTimer); beaconSaveMarkers(); }

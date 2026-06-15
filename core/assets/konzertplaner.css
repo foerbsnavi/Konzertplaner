@@ -2010,14 +2010,21 @@ body:not(.edit-mode) .rehearsal-row {
 .app-footer .app-version { font-variant-numeric: tabular-nums; }
 #update-result { color: var(--text); }
 
-/* Freigabe-Ansicht: schreibgeschützt, komplette Bearbeitungs-UI ausgeblendet */
-.share-mode #meta-edit,
-.share-mode #edit-toggle,
-.share-mode #add-entry,
-.share-mode #add-heading,
-.share-mode #marker-toggle,
-.share-mode #pool-section,
+/* Freigabe-Ansicht: Bedienelemente je nach Berechtigung ein-/ausblenden.
+   view    = alle Bearbeitungs-Controls aus
+   markers = zusätzlich Marker-Bearbeitung erlaubt (#marker-toggle sichtbar)
+   edit    = volle Werkzeugleiste (nur Abmelden + Freigabe-Box bleiben aus) */
+.share-mode:not(.share-perm-edit) #meta-edit,
+.share-mode:not(.share-perm-edit) #edit-toggle,
+.share-mode:not(.share-perm-edit) #add-entry,
+.share-mode:not(.share-perm-edit) #add-heading,
+.share-mode:not(.share-perm-edit) #pool-section,
+.share-mode:not(.share-perm-edit):not(.share-perm-markers) #marker-toggle,
 .share-mode .logout-btn { display: none !important; }
+/* Die Freigabe-Einstellungen selbst sind immer nur Sache des Besitzers */
+.share-mode .share-fs { display: none !important; }
+/* Tracks endgültig aus dem (gemeinsamen) Pool löschen bleibt Besitzer-Sache */
+.share-mode .pool-delete { display: none !important; }
 
 .share-badge {
   background: var(--accent-soft);

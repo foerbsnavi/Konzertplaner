@@ -1,7 +1,14 @@
 {
-    "version": "1.8.6",
+    "version": "1.9.0",
     "date": "2026-06-15",
     "changelog": [
+        {
+            "version": "1.9.0",
+            "date": "2026-06-15",
+            "changes": [
+                "Neu: Abgestufte Freigaben. Beim Teilen eines Konzerts legst du jetzt fest, was die Betrachter dürfen — „Nur ansehen & abspielen“ (wie bisher), „Marker setzen & bearbeiten“ oder „Das ganze Programm bearbeiten“. So kann die Band auf Wunsch direkt mitarbeiten, ohne einen eigenen Account. Die Freigabe-Einstellungen selbst sowie Löschen, Duplizieren und Backups bleiben immer dem Besitzer vorbehalten."
+            ]
+        },
         {
             "version": "1.8.6",
             "date": "2026-06-15",
