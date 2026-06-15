@@ -1,7 +1,14 @@
 {
-    "version": "1.10.0",
+    "version": "1.11.0",
     "date": "2026-06-15",
     "changelog": [
+        {
+            "version": "1.11.0",
+            "date": "2026-06-15",
+            "changes": [
+                "Neu: Noten-Editor. Im Bearbeitungsmodus öffnet der Button „Noteneditor“ (neben „+ Noten“) ein Fenster, in dem du eigene Noten schreiben kannst — mit sofortigem Notenbild und Abspielfunktion. Eine Hilfsleiste und ein Spickzettel machen den Einstieg leicht. Gespeicherte Noten erscheinen — wie hochgeladene Notenblätter — als anklickbares „Noten“-Element am Song und lassen sich jederzeit wieder öffnen und ändern."
+            ]
+        },
         {
             "version": "1.10.0",
             "date": "2026-06-15",

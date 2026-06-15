@@ -777,6 +777,7 @@ function duplicate_concert(string $dir, string $baseDir, string $notesDir, strin
                 'type'             => 'heading',
                 'title'            => (string)($e['title'] ?? ''),
                 'notes'            => '',
+                'abc'              => '',
                 'tracks'           => (object)[],
                 'note_files'       => [],
                 'manual_duration'  => 0.0,
@@ -802,6 +803,7 @@ function duplicate_concert(string $dir, string $baseDir, string $notesDir, strin
             'type'             => '',
             'title'            => (string)($e['title'] ?? ''),
             'notes'            => (string)($e['notes'] ?? ''),
+            'abc'              => (string)($e['abc'] ?? ''),
             'tracks'           => (object)(is_array($e['tracks'] ?? null) ? $e['tracks'] : []),
             'note_files'       => $newNoteFiles,
             'manual_duration'  => (float)($e['manual_duration'] ?? 0),
@@ -861,6 +863,7 @@ function duplicate_entry(string $dir, string $baseDir, string $notesDir, string 
             'type'             => 'heading',
             'title'            => (string)($src['title'] ?? ''),
             'notes'            => '',
+            'abc'              => '',
             'tracks'           => (object)[],
             'note_files'       => [],
             'manual_duration'  => 0.0,
@@ -885,6 +888,7 @@ function duplicate_entry(string $dir, string $baseDir, string $notesDir, string 
             'type'             => '',
             'title'            => (string)($src['title'] ?? ''),
             'notes'            => (string)($src['notes'] ?? ''),
+            'abc'              => (string)($src['abc'] ?? ''),
             'tracks'           => (object)(is_array($src['tracks'] ?? null) ? $src['tracks'] : []),
             'note_files'       => $newNoteFiles,
             'manual_duration'  => (float)($src['manual_duration'] ?? 0),
@@ -949,6 +953,7 @@ function clean_entries(array $rawEntries, array $validTracksFlip, string $baseDi
                 'type'             => 'heading',
                 'title'            => mb_substr((string)($e['title'] ?? ''), 0, 300),
                 'notes'            => '',
+                'abc'              => '',
                 'tracks'           => (object)[],
                 'note_files'       => [],
                 'manual_duration'  => 0.0,
@@ -993,6 +998,7 @@ function clean_entries(array $rawEntries, array $validTracksFlip, string $baseDi
             'type'             => '',
             'title'            => mb_substr((string)($e['title'] ?? ''), 0, 300),
             'notes'            => mb_substr((string)($e['notes'] ?? ''), 0, 5000),
+            'abc'              => mb_substr((string)($e['abc'] ?? ''), 0, 20000),
             'tracks'           => (object)$tracks,
             'note_files'       => $noteFiles,
             'manual_duration'  => $manualDur,
@@ -2609,6 +2615,58 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     </div>
   </div>
 
+  <!-- Noten-Editor-Modal (abcjs) -->
+  <div id="sheet-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="sheet-modal-title" hidden>
+    <div class="modal-inner modal-inner-wide">
+      <h2 id="sheet-modal-title">Noten</h2>
+      <div id="sheet-toolbar" class="sheet-toolbar" role="toolbar" aria-label="Noten-Werkzeuge">
+        <button type="button" data-ins="C " title="Note C">C</button>
+        <button type="button" data-ins="D " title="Note D">D</button>
+        <button type="button" data-ins="E " title="Note E">E</button>
+        <button type="button" data-ins="F " title="Note F">F</button>
+        <button type="button" data-ins="G " title="Note G">G</button>
+        <button type="button" data-ins="A " title="Note A">A</button>
+        <button type="button" data-ins="B " title="Note B (deutsches H)">B</button>
+        <span class="sheet-tb-sep" aria-hidden="true"></span>
+        <button type="button" data-ins="^" title="Kreuz (z. B. ^C = Cis)">♯</button>
+        <button type="button" data-ins="_" title="Be (z. B. _B = Bes)">♭</button>
+        <button type="button" data-ins="=" title="Auflösungszeichen">♮</button>
+        <button type="button" data-ins="z " title="Pause">Pause</button>
+        <button type="button" data-ins="| " title="Taktstrich">|</button>
+        <button type="button" data-ins="|: " title="Wiederholung Anfang">|:</button>
+        <button type="button" data-ins=":| " title="Wiederholung Ende">:|</button>
+      </div>
+      <div class="sheet-grid">
+        <div class="sheet-input-col">
+          <label for="sheet-abc" class="sheet-label">Noten (ABC-Notation)</label>
+          <textarea id="sheet-abc" class="sheet-abc" spellcheck="false" rows="10"
+                    placeholder="C D E F | G A B c |"></textarea>
+          <details class="sheet-help">
+            <summary>Kurz-Spickzettel</summary>
+            <ul>
+              <li><strong>Tonhöhe:</strong> C D E F G A B (B = deutsches H). Kleinbuchstaben = Oktave höher (c d e …), Komma tiefer (<code>C,</code>), Apostroph höher (<code>c'</code>).</li>
+              <li><strong>Länge:</strong> Zahl verlängert (<code>C2</code> = doppelt), Schrägstrich verkürzt (<code>C/2</code>).</li>
+              <li><strong>Vorzeichen:</strong> <code>^C</code> = Cis, <code>_C</code> = Ces, <code>=C</code> = aufgelöst.</li>
+              <li><strong>Takt &amp; Wiederholung:</strong> <code>|</code> · <code>|: … :|</code></li>
+              <li><strong>Kopf:</strong> <code>M:</code> Taktart, <code>L:</code> Grundlänge, <code>K:</code> Tonart.</li>
+            </ul>
+          </details>
+        </div>
+        <div class="sheet-preview-col">
+          <div id="sheet-preview" class="sheet-preview" aria-live="polite"></div>
+          <button type="button" class="ghost sheet-play-btn" id="sheet-play">
+            <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>
+            Abspielen
+          </button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="ghost" id="sheet-cancel">Schließen</button>
+        <button type="button" class="primary" id="sheet-save">Speichern</button>
+      </div>
+    </div>
+  </div>
+
   <div id="lightbox" role="dialog" aria-modal="true" aria-label="Noten-Vorschau" hidden>
     <a id="lightbox-open-ext" href="#" target="_blank" rel="noopener">In neuem Tab öffnen</a>
     <button id="lightbox-close" type="button" aria-label="Vorschau schließen">
@@ -2704,6 +2762,9 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     </div>
   </div>
 
+  <!-- Noten-Editor: abcjs (UMD, setzt window.ABCJS) — vor dem Modul laden -->
+  <script src="<?= htmlspecialchars(KP_ASSET_URL, ENT_QUOTES, 'UTF-8') ?>/abcjs-basic-min.js?v=<?= $ASSET_VER ?>"></script>
+
   <script type="module">
   import WaveSurfer from '<?php
     // ES-Module brauchen einen aufloesbaren Specifier (/, ./, ../). Ein nackter
@@ -2774,6 +2835,14 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       noteModalTitle:  document.getElementById('note-modal-title'),
       noteModalSave:   document.getElementById('note-modal-save'),
       noteModalCancel: document.getElementById('note-modal-cancel'),
+      sheetModal:      document.getElementById('sheet-modal'),
+      sheetTitle:      document.getElementById('sheet-modal-title'),
+      sheetAbc:        document.getElementById('sheet-abc'),
+      sheetPreview:    document.getElementById('sheet-preview'),
+      sheetToolbar:    document.getElementById('sheet-toolbar'),
+      sheetPlay:       document.getElementById('sheet-play'),
+      sheetSave:       document.getElementById('sheet-save'),
+      sheetCancel:     document.getElementById('sheet-cancel'),
       metaName:    document.getElementById('meta-name'),
       metaDate:    document.getElementById('meta-date'),
       metaDesc:    document.getElementById('meta-description'),
@@ -3883,6 +3952,83 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       });
     }
 
+    // ---------- Noten-Editor (Popup, abcjs) ----------
+    const SHEET_TEMPLATE = 'X:1\nM:4/4\nL:1/4\nK:C\nC D E F | G A B c |\n';
+    let sheetEntry = null;
+    let sheetSynth = null;
+    let sheetAudioCtx = null;
+    function renderSheetPreview() {
+      if (!window.ABCJS || !els.sheetPreview) return;
+      try {
+        ABCJS.renderAbc(els.sheetPreview, els.sheetAbc.value || '', { responsive: 'resize', paddingtop: 0, paddingbottom: 6 });
+      } catch (e) { /* abcjs ist fehlertolerant */ }
+    }
+    function openSheetModal(entry) {
+      if (!window.ABCJS) { kpAlert('Der Noten-Editor konnte nicht geladen werden.'); return; }
+      sheetEntry = entry;
+      const editable = CAN_EDIT_PROGRAM;
+      els.sheetAbc.value = (entry.abc && entry.abc.trim() !== '') ? entry.abc : (editable ? SHEET_TEMPLATE : '');
+      els.sheetAbc.readOnly = !editable;
+      els.sheetSave.hidden = !editable;
+      els.sheetToolbar.style.display = editable ? '' : 'none';
+      els.sheetTitle.textContent = (entry.title && entry.type !== 'heading') ? 'Noten — ' + entry.title : 'Noten';
+      els.sheetModal.hidden = false;
+      renderSheetPreview();
+      setTimeout(() => { (editable ? els.sheetAbc : els.sheetCancel).focus(); }, 0);
+    }
+    function closeSheetModal() {
+      if (sheetSynth) { try { sheetSynth.stop(); } catch (e) {} }
+      els.sheetModal.hidden = true;
+      sheetEntry = null;
+    }
+    function saveSheetModal() {
+      if (!sheetEntry || !CAN_EDIT_PROGRAM) { closeSheetModal(); return; }
+      let v = els.sheetAbc.value.trim();
+      if (v === SHEET_TEMPLATE.trim()) v = ''; // unverändertes Beispiel = keine Noten
+      sheetEntry.abc = v;
+      save();
+      closeSheetModal();
+      render();
+    }
+    function insertSheet(text) {
+      const ta = els.sheetAbc;
+      const s = ta.selectionStart, e = ta.selectionEnd;
+      ta.value = ta.value.slice(0, s) + text + ta.value.slice(e);
+      ta.selectionStart = ta.selectionEnd = s + text.length;
+      ta.focus();
+      renderSheetPreview();
+    }
+    async function playSheet() {
+      if (!window.ABCJS || !ABCJS.synth || !ABCJS.synth.supportsAudio()) {
+        kpAlert('Wiedergabe wird von diesem Browser nicht unterstützt.');
+        return;
+      }
+      try {
+        const visual = ABCJS.renderAbc(els.sheetPreview, els.sheetAbc.value || '', { responsive: 'resize' })[0];
+        if (!sheetAudioCtx) sheetAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (sheetAudioCtx.state === 'suspended') await sheetAudioCtx.resume();
+        if (sheetSynth) { try { sheetSynth.stop(); } catch (e) {} }
+        sheetSynth = new ABCJS.synth.CreateSynth();
+        await sheetSynth.init({ audioContext: sheetAudioCtx, visualObj: visual });
+        await sheetSynth.prime();
+        sheetSynth.start();
+      } catch (e) { kpAlert('Wiedergabe nicht möglich.'); }
+    }
+    if (els.sheetModal) {
+      els.sheetAbc.addEventListener('input', renderSheetPreview);
+      els.sheetToolbar.addEventListener('click', (ev) => {
+        const b = ev.target.closest('button[data-ins]');
+        if (b) insertSheet(b.getAttribute('data-ins'));
+      });
+      els.sheetPlay.addEventListener('click', playSheet);
+      els.sheetSave.addEventListener('click', saveSheetModal);
+      els.sheetCancel.addEventListener('click', closeSheetModal);
+      els.sheetModal.addEventListener('click', (ev) => { if (ev.target === els.sheetModal) closeSheetModal(); });
+      document.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape' && !els.sheetModal.hidden) closeSheetModal();
+      });
+    }
+
     function renderNoteFiles(entry) {
       const wrap = document.createElement('div');
       wrap.className = 'note-files';
@@ -3916,6 +4062,31 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         });
         nchip.appendChild(nrm);
         wrap.appendChild(nchip);
+      }
+      // Noten (abcjs) als anklickbares Chip — Klick öffnet den Noten-Editor
+      if ((entry.abc || '').trim() !== '') {
+        const schip = document.createElement('span');
+        schip.className = 'note-file note-sheet-chip';
+        const slink = document.createElement('a');
+        slink.href = '#';
+        slink.textContent = 'Noten';
+        slink.title = 'Noten ansehen/bearbeiten';
+        slink.addEventListener('click', (ev) => { ev.preventDefault(); openSheetModal(entry); });
+        schip.appendChild(slink);
+        const srm = document.createElement('button');
+        srm.type = 'button';
+        srm.innerHTML = icon('i-close');
+        srm.title = 'Noten entfernen';
+        srm.setAttribute('aria-label', 'Noten entfernen');
+        srm.addEventListener('click', async () => {
+          if (!CAN_EDIT_PROGRAM) return;
+          if (!await kpConfirm('Diese Noten wirklich entfernen?')) return;
+          entry.abc = '';
+          save();
+          render();
+        });
+        schip.appendChild(srm);
+        wrap.appendChild(schip);
       }
       const files = entry.note_files || [];
       files.forEach(path => {
@@ -3970,6 +4141,16 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       });
       label.appendChild(inp);
       wrap.appendChild(label);
+
+      // „Noteneditor“-Button (nur im Edit-Modus sichtbar, CSS) — rechts neben „+ Noten“
+      const sheetBtn = document.createElement('button');
+      sheetBtn.type = 'button';
+      sheetBtn.className = 'upload-btn note-sheet-btn';
+      sheetBtn.innerHTML = icon('i-edit') + ' Noteneditor';
+      sheetBtn.title = 'Noten schreiben oder bearbeiten';
+      sheetBtn.addEventListener('click', () => openSheetModal(entry));
+      wrap.appendChild(sheetBtn);
+
       return wrap;
     }
 
@@ -4068,7 +4249,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     els.addBtn.addEventListener('click', () => {
       // Letzten bisherigen Eintrag entkoppeln, falls ein Anker zum (jetzt zu verschiebenden) Listenende stand.
       sanitizeAnchors();
-      state.entries.push({ id: uid(), type: '', title: '', notes: '', tracks: {}, note_files: [], manual_duration: 0, anchored_to_next: false, status: 0 });
+      state.entries.push({ id: uid(), type: '', title: '', notes: '', abc: '', tracks: {}, note_files: [], manual_duration: 0, anchored_to_next: false, status: 0 });
       render();
       save();
       // Fokus auf den Titel des neu angelegten Eintrags (immer der letzte .entry, nicht der Anker-Gap).
@@ -4078,7 +4259,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
 
     els.addHeadingBtn?.addEventListener('click', () => {
       sanitizeAnchors();
-      state.entries.push({ id: uid(), type: 'heading', title: '', notes: '', tracks: {}, note_files: [], manual_duration: 0, anchored_to_next: false, status: 0 });
+      state.entries.push({ id: uid(), type: 'heading', title: '', notes: '', abc: '', tracks: {}, note_files: [], manual_duration: 0, anchored_to_next: false, status: 0 });
       render();
       save();
       const newHeading = els.entries.querySelector('.entry.heading:last-of-type');
