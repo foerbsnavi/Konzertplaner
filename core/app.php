@@ -3960,8 +3960,9 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     function renderSheetPreview() {
       if (!window.ABCJS || !els.sheetPreview) return;
       try {
-        const w = Math.max(320, els.sheetPreview.clientWidth - 24);
-        ABCJS.renderAbc(els.sheetPreview, els.sheetAbc.value || '', { staffwidth: w, scale: 1.4, paddingtop: 8, paddingbottom: 12, paddingleft: 0, paddingright: 0 });
+        const sc = 1.3;
+        const w = Math.max(240, (els.sheetPreview.clientWidth - 24) / sc); // *sc bleibt in der Box
+        ABCJS.renderAbc(els.sheetPreview, els.sheetAbc.value || '', { staffwidth: w, scale: sc, paddingtop: 8, paddingbottom: 12, paddingleft: 0, paddingright: 0 });
       } catch (e) { /* abcjs ist fehlertolerant */ }
     }
     function openSheetModal(entry) {
@@ -4005,8 +4006,9 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         return;
       }
       try {
-        const w = Math.max(320, els.sheetPreview.clientWidth - 24);
-        const visual = ABCJS.renderAbc(els.sheetPreview, els.sheetAbc.value || '', { staffwidth: w, scale: 1.4 })[0];
+        const sc = 1.3;
+        const w = Math.max(240, (els.sheetPreview.clientWidth - 24) / sc);
+        const visual = ABCJS.renderAbc(els.sheetPreview, els.sheetAbc.value || '', { staffwidth: w, scale: sc })[0];
         if (!sheetAudioCtx) sheetAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (sheetAudioCtx.state === 'suspended') await sheetAudioCtx.resume();
         if (sheetSynth) { try { sheetSynth.stop(); } catch (e) {} }
