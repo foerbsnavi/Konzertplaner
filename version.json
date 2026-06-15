@@ -1,7 +1,14 @@
 {
-    "version": "1.9.1",
+    "version": "1.9.2",
     "date": "2026-06-15",
     "changelog": [
+        {
+            "version": "1.9.2",
+            "date": "2026-06-15",
+            "changes": [
+                "Fehler behoben: Im Einstellungs-Fenster wurde die Checkbox „Freigabe aktiv“ zu breit gezogen und ragte über den Rand hinaus — ein Folgefehler des vorigen Layout-Updates, jetzt korrigiert."
+            ]
+        },
         {
             "version": "1.9.1",
             "date": "2026-06-15",

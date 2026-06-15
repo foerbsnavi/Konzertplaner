@@ -1488,7 +1488,7 @@ body:not(.edit-mode) .track-slot.empty { display: none; }
 .meta-fs > label:last-of-type { margin-bottom: 0; }
 #concert-form input,
 #concert-form textarea,
-#meta-form input:not(.rehearsal-date):not(.rehearsal-note),
+#meta-form input:not(.rehearsal-date):not(.rehearsal-note):not([type="checkbox"]),
 #meta-form textarea {
   font: inherit;
   font-size: 14px;
