@@ -1,7 +1,15 @@
 {
-    "version": "1.11.4",
+    "version": "1.11.5",
     "date": "2026-06-15",
     "changelog": [
+        {
+            "version": "1.11.5",
+            "date": "2026-06-15",
+            "changes": [
+                "PDF-Vorschau: Hochgeladene PDFs öffnen sich jetzt wieder direkt in der Vorschau — Chrome hatte die eingebettete Anzeige zuvor blockiert.",
+                "Optik: Die „Notiz“-Anzeige am Song sieht jetzt genauso aus wie die übrigen Anhänge (PDF/Bild, Noten)."
+            ]
+        },
         {
             "version": "1.11.4",
             "date": "2026-06-15",

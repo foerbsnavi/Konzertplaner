@@ -5284,7 +5284,10 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         const frame = document.createElement('iframe');
         frame.src = path;
         frame.title = 'Noten-Vorschau: ' + (fileName || '');
-        frame.setAttribute('sandbox', '');
+        // Kein sandbox="" — das verhindert in Chrome die PDF-Anzeige ("Seite blockiert").
+        // Die Datei ist same-origin, wird beim Upload auf echten PDF-Typ geprüft und
+        // liegt in einem Ordner ohne Skript-Ausführung (.htaccess). referrerPolicy zur Sicherheit.
+        frame.referrerPolicy = 'no-referrer';
         frame.tabIndex = -1;
         c.appendChild(frame);
       } else {

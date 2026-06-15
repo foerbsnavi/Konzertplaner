@@ -583,9 +583,7 @@ body.edit-mode .entry-status-label { display: none; }
 .upload-btn:hover { color: var(--text); border-color: var(--accent); }
 .upload-btn:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* Notiz-Chip (anklickbarer Hinweis wie ein Anhang) — dezent abgesetzt von Datei-Chips */
-.note-text-chip { background: var(--panel); }
-.note-text-chip a::before { content: "✎ "; opacity: .7; }
+/* Notiz- und Noten-Chips nutzen dieselbe Optik wie Datei-Chips (.note-file) */
 
 /* Notiz-Editor-Popup: großes Textfeld wie ein Notizzettel */
 .note-modal-text {
