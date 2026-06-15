@@ -583,6 +583,26 @@ body.edit-mode .entry-status-label { display: none; }
 .upload-btn:hover { color: var(--text); border-color: var(--accent); }
 .upload-btn:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+/* Notiz-Chip (anklickbarer Hinweis wie ein Anhang) — dezent abgesetzt von Datei-Chips */
+.note-text-chip { background: var(--panel); }
+.note-text-chip a::before { content: "✎ "; opacity: .7; }
+
+/* Notiz-Editor-Popup: großes Textfeld wie ein Notizzettel */
+.note-modal-text {
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  resize: vertical;
+  min-height: 140px;
+}
+.note-modal-text:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+.note-modal-text[readonly] { background: var(--panel); cursor: default; }
+
 /* Eintrags-Aktionen (Kopieren/Löschen) als kompakte Gruppe oben rechts —
    nebeneinander, damit der Löschen-Knopf nicht optisch auf der Track-Zeile sitzt. */
 .entry-actions { display: flex; flex-direction: row; gap: 2px; align-self: start; }

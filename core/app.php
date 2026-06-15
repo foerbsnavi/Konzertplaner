@@ -2596,6 +2596,19 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     </div>
   </main>
 
+  <!-- Notiz-Editor-Modal -->
+  <div id="note-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="note-modal-title" hidden>
+    <div class="modal-inner">
+      <h2 id="note-modal-title">Notiz</h2>
+      <textarea id="note-modal-text" class="note-modal-text" rows="8" maxlength="5000"
+                placeholder="Notiz zu diesem Song — z. B. Hornstimme, Übergang, Lichtwechsel, „3 Halbtöne tiefer“ …"></textarea>
+      <div class="modal-actions">
+        <button type="button" class="ghost" id="note-modal-cancel">Schließen</button>
+        <button type="button" class="primary" id="note-modal-save">Speichern</button>
+      </div>
+    </div>
+  </div>
+
   <div id="lightbox" role="dialog" aria-modal="true" aria-label="Noten-Vorschau" hidden>
     <a id="lightbox-open-ext" href="#" target="_blank" rel="noopener">In neuem Tab öffnen</a>
     <button id="lightbox-close" type="button" aria-label="Vorschau schließen">
@@ -2756,6 +2769,11 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       lightboxContent: document.getElementById('lightbox-content'),
       lightboxClose:   document.getElementById('lightbox-close'),
       lightboxExt:     document.getElementById('lightbox-open-ext'),
+      noteModal:       document.getElementById('note-modal'),
+      noteModalText:   document.getElementById('note-modal-text'),
+      noteModalTitle:  document.getElementById('note-modal-title'),
+      noteModalSave:   document.getElementById('note-modal-save'),
+      noteModalCancel: document.getElementById('note-modal-cancel'),
       metaName:    document.getElementById('meta-name'),
       metaDate:    document.getElementById('meta-date'),
       metaDesc:    document.getElementById('meta-description'),
@@ -2814,7 +2832,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       try { localStorage.setItem(EDIT_KEY, on ? '1' : '0'); } catch (e) {}
       // Programm-Inputs im Read-Only-Modus sperren und aus der Tab-Reihenfolge nehmen.
       // Konzert-Meta-Inputs sind im Modal und nur im Edit-Modus erreichbar.
-      document.querySelectorAll('.entry-title, .heading-title, .notes, .manual-dur input').forEach(el => {
+      document.querySelectorAll('.entry-title, .heading-title, .manual-dur input').forEach(el => {
         if (on) {
           el.removeAttribute('readonly');
           el.tabIndex = 0;
@@ -3594,16 +3612,6 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         body.appendChild(durWrap);
       }
 
-      const notes = document.createElement('textarea');
-      notes.className = 'notes';
-      notes.placeholder = 'Notizen (z. B. Hornstimme, Übergang, Licht …)';
-      notes.value = entry.notes || '';
-      notes.rows = 1;
-      notes.setAttribute('aria-label', 'Notizen für Eintrag ' + trackIdx);
-      if (!isEditMode()) notes.setAttribute('readonly', 'readonly');
-      notes.addEventListener('input', () => { entry.notes = notes.value; save(); });
-      body.appendChild(notes);
-
       body.appendChild(renderNoteFiles(entry));
       el.appendChild(body);
 
@@ -3839,12 +3847,75 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       return el;
     }
 
+    // ---------- Notiz-Editor (Popup, wie ein Notizzettel) ----------
+    let noteModalEntry = null;
+    function openNoteModal(entry) {
+      noteModalEntry = entry;
+      const editable = CAN_EDIT_PROGRAM;
+      els.noteModalText.value = entry.notes || '';
+      els.noteModalText.readOnly = !editable;
+      els.noteModalSave.hidden = !editable;
+      els.noteModalTitle.textContent = (entry.title && entry.type !== 'heading')
+        ? 'Notiz — ' + entry.title : 'Notiz';
+      els.noteModal.hidden = false;
+      setTimeout(() => { (editable ? els.noteModalText : els.noteModalCancel).focus(); }, 0);
+    }
+    function closeNoteModal() {
+      els.noteModal.hidden = true;
+      noteModalEntry = null;
+    }
+    function saveNoteModal() {
+      if (!noteModalEntry || !CAN_EDIT_PROGRAM) { closeNoteModal(); return; }
+      noteModalEntry.notes = els.noteModalText.value;
+      save();
+      closeNoteModal();
+      render();
+    }
+    if (els.noteModal) {
+      els.noteModalSave.addEventListener('click', saveNoteModal);
+      els.noteModalCancel.addEventListener('click', closeNoteModal);
+      els.noteModal.addEventListener('click', (ev) => { if (ev.target === els.noteModal) closeNoteModal(); });
+      els.noteModalText.addEventListener('keydown', (ev) => {
+        if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') { ev.preventDefault(); saveNoteModal(); }
+      });
+      document.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape' && !els.noteModal.hidden) closeNoteModal();
+      });
+    }
+
     function renderNoteFiles(entry) {
       const wrap = document.createElement('div');
       wrap.className = 'note-files';
       if (entry.note_file && !entry.note_files) {
         entry.note_files = [entry.note_file];
         delete entry.note_file;
+      }
+      // Notiz als anklickbares Chip (wie ein Anhang): immer sichtbar wenn vorhanden,
+      // Klick öffnet den Notiz-Editor (bearbeitbar je nach Recht). Das × (entfernen)
+      // blendet das CSS im Lesemodus aus — wie bei Dateien.
+      if ((entry.notes || '').trim() !== '') {
+        const nchip = document.createElement('span');
+        nchip.className = 'note-file note-text-chip';
+        const nlink = document.createElement('a');
+        nlink.href = '#';
+        nlink.textContent = 'Notiz';
+        nlink.title = 'Notiz ansehen/bearbeiten';
+        nlink.addEventListener('click', (ev) => { ev.preventDefault(); openNoteModal(entry); });
+        nchip.appendChild(nlink);
+        const nrm = document.createElement('button');
+        nrm.type = 'button';
+        nrm.innerHTML = icon('i-close');
+        nrm.title = 'Notiz entfernen';
+        nrm.setAttribute('aria-label', 'Notiz entfernen');
+        nrm.addEventListener('click', async () => {
+          if (!CAN_EDIT_PROGRAM) return;
+          if (!await kpConfirm('Diese Notiz wirklich entfernen?')) return;
+          entry.notes = '';
+          save();
+          render();
+        });
+        nchip.appendChild(nrm);
+        wrap.appendChild(nchip);
       }
       const files = entry.note_files || [];
       files.forEach(path => {
@@ -3876,6 +3947,15 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         chip.appendChild(rm);
         wrap.appendChild(chip);
       });
+      // „Notizen“-Button (nur im Edit-Modus sichtbar, CSS) — öffnet den Notiz-Editor
+      const noteBtn = document.createElement('button');
+      noteBtn.type = 'button';
+      noteBtn.className = 'upload-btn note-add-btn';
+      noteBtn.innerHTML = icon('i-edit') + ' Notizen';
+      noteBtn.title = 'Notiz schreiben oder bearbeiten';
+      noteBtn.addEventListener('click', () => openNoteModal(entry));
+      wrap.appendChild(noteBtn);
+
       const label = document.createElement('label');
       label.className = 'upload-btn';
       label.innerHTML = icon('i-plus') + ' Noten (PDF/Bild)';

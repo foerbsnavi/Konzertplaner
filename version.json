@@ -1,7 +1,14 @@
 {
-    "version": "1.9.2",
+    "version": "1.10.0",
     "date": "2026-06-15",
     "changelog": [
+        {
+            "version": "1.10.0",
+            "date": "2026-06-15",
+            "changes": [
+                "Notizen wandern in einen eigenen Notizzettel: Im Bearbeitungsmodus öffnet der neue Button „Notizen“ (neben „+ Noten“) ein Fenster zum Schreiben. Vorhandene Notizen erscheinen — wie hochgeladene Noten — als anklickbares „Notiz“-Element am Song und lassen sich jederzeit per Klick öffnen und ändern, auch außerhalb des Bearbeitungsmodus."
+            ]
+        },
         {
             "version": "1.9.2",
             "date": "2026-06-15",
