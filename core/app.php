@@ -3955,8 +3955,8 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     // ---------- Noten-Editor (Popup, abcjs) ----------
     const SHEET_TEMPLATE = 'X:1\nM:4/4\nL:1/4\nK:C\nC D E F | G A B c |\n';
     let sheetEntry = null;
-    let sheetSynth = null;
     let sheetAudioCtx = null;
+    let sheetPlayGain = null;
     function renderSheetPreview() {
       if (!window.ABCJS || !els.sheetPreview) return;
       try {
@@ -3979,7 +3979,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       setTimeout(() => { (editable ? els.sheetAbc : els.sheetCancel).focus(); }, 0);
     }
     function closeSheetModal() {
-      if (sheetSynth) { try { sheetSynth.stop(); } catch (e) {} }
+      stopMelody();
       els.sheetModal.hidden = true;
       sheetEntry = null;
     }
@@ -4000,22 +4000,76 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       ta.focus();
       renderSheetPreview();
     }
-    async function playSheet() {
-      if (!window.ABCJS || !ABCJS.synth || !ABCJS.synth.supportsAudio()) {
-        kpAlert('Wiedergabe wird von diesem Browser nicht unterstützt.');
-        return;
+    // Einfacher, abhängigkeitsfreier Melodie-Player (Web-Audio-Oszillator).
+    // Spielt die einstimmige ABC-Melodie ohne Soundfont/Netzzugriff — CSP-sicher
+    // und offline. Versteht Noten A–G/a–g, Oktaven (, '), Vorzeichen (^ _ =),
+    // Längen (2, /2) und Pausen (z).
+    const ABC_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+    function parseAbcMelody(abc) {
+      const lines = String(abc).split('\n');
+      let unit = 0.25; // Grundlänge L:, Standard Viertel
+      let body = [];
+      let afterKey = false;
+      for (const ln of lines) {
+        if (/^[A-Za-z]:/.test(ln)) {              // Kopfzeile (X: M: L: K: …)
+          const lm = ln.match(/^L:\s*(\d+)\s*\/\s*(\d+)/); if (lm) unit = (+lm[1]) / (+lm[2]);
+          if (/^K:/.test(ln)) afterKey = true;    // Notentext beginnt nach K:
+          continue;
+        }
+        if (afterKey) body.push(ln);
       }
+      if (!body.length) body = lines.filter(l => !/^[A-Za-z]:/.test(l));
+      const text = body.join(' ');
+      const re = /(\^\^|\^|__|_|=)?([A-Ga-gz])([,']*)(\d+)?(?:(\/)(\d+)?)?/g;
+      const notes = []; let m;
+      while ((m = re.exec(text)) !== null) {
+        const acc = m[1], letter = m[2], octs = m[3] || '', numStr = m[4], slash = m[5], denStr = m[6];
+        const mult = numStr ? +numStr : 1;
+        const den = slash ? (denStr ? +denStr : 2) : 1;
+        const durSec = (unit * mult / den) * 2.0; // Viertel ≈ 0,5 s (120 bpm)
+        if (letter === 'z') { notes.push({ freq: 0, dur: durSec }); continue; }
+        const upper = letter === letter.toUpperCase();
+        let midi = (upper ? 60 : 72) + ABC_SEMI[letter.toUpperCase()]; // C4 bzw. C5
+        for (const ch of octs) midi += (ch === "'") ? 12 : -12;
+        if (acc === '^') midi += 1; else if (acc === '^^') midi += 2;
+        else if (acc === '_') midi -= 1; else if (acc === '__') midi -= 2;
+        notes.push({ freq: 440 * Math.pow(2, (midi - 69) / 12), dur: durSec });
+      }
+      return notes;
+    }
+    function stopMelody() {
+      if (sheetPlayGain) { try { sheetPlayGain.disconnect(); } catch (e) {} sheetPlayGain = null; }
+    }
+    function playSheet() {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { kpAlert('Wiedergabe wird von diesem Browser nicht unterstützt.'); return; }
+      const notes = parseAbcMelody(els.sheetAbc.value || '');
+      if (!notes.length) { kpAlert('Keine abspielbaren Noten gefunden.'); return; }
       try {
-        const sc = 1.3;
-        const w = Math.max(240, (els.sheetPreview.clientWidth - 24) / sc);
-        const visual = ABCJS.renderAbc(els.sheetPreview, els.sheetAbc.value || '', { staffwidth: w, scale: sc })[0];
-        if (!sheetAudioCtx) sheetAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (sheetAudioCtx.state === 'suspended') await sheetAudioCtx.resume();
-        if (sheetSynth) { try { sheetSynth.stop(); } catch (e) {} }
-        sheetSynth = new ABCJS.synth.CreateSynth();
-        await sheetSynth.init({ audioContext: sheetAudioCtx, visualObj: visual });
-        await sheetSynth.prime();
-        sheetSynth.start();
+        if (!sheetAudioCtx) sheetAudioCtx = new AC();
+        if (sheetAudioCtx.state === 'suspended') sheetAudioCtx.resume();
+        stopMelody();
+        const master = sheetAudioCtx.createGain();
+        master.gain.value = 0.3;
+        master.connect(sheetAudioCtx.destination);
+        sheetPlayGain = master;
+        let t = sheetAudioCtx.currentTime + 0.06;
+        for (const n of notes) {
+          if (n.freq > 0) {
+            const osc = sheetAudioCtx.createOscillator();
+            const g = sheetAudioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = n.freq;
+            const a = 0.012, rel = Math.min(0.09, n.dur * 0.35);
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(1, t + a);
+            g.gain.setValueAtTime(1, Math.max(t + a, t + n.dur - rel));
+            g.gain.exponentialRampToValueAtTime(0.0001, t + n.dur);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + n.dur + 0.03);
+          }
+          t += n.dur;
+        }
       } catch (e) { kpAlert('Wiedergabe nicht möglich.'); }
     }
     if (els.sheetModal) {
@@ -4135,7 +4189,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
 
       const label = document.createElement('label');
       label.className = 'upload-btn';
-      label.innerHTML = icon('i-plus') + ' Noten (PDF/Bild)';
+      label.innerHTML = icon('i-plus') + ' PDF/Bild';
       const inp = document.createElement('input');
       inp.type = 'file';
       inp.accept = '.pdf,image/*';
@@ -4527,7 +4581,6 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       if (!Array.isArray(state.meta.slots) || !state.meta.slots.length) {
         state.meta.slots = [{ id: localSlotId(), name: 'Track', color: 'blue' }];
       }
-      const editMode = isEditMode();
       state.meta.slots.forEach((s, idx) => {
         const row = document.createElement('div');
         row.className = 'slot-row';
@@ -4544,7 +4597,6 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
           b.title = 'Farbe ' + cname;
           b.setAttribute('aria-label', 'Farbe ' + cname + ' für Slot ' + (idx + 1));
           b.setAttribute('aria-pressed', s.color === ck ? 'true' : 'false');
-          b.disabled = !editMode;
           b.addEventListener('click', () => { s.color = ck; renderSlotsEditor(); render(); saveMeta(); });
           colors.appendChild(b);
         });
@@ -4557,7 +4609,6 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         nameInp.maxLength = 40;
         nameInp.placeholder = 'Slot-Name';
         nameInp.setAttribute('aria-label', 'Name von Slot ' + (idx + 1));
-        if (!editMode) nameInp.setAttribute('readonly', 'readonly');
         nameInp.addEventListener('input', () => { s.name = nameInp.value; render(); rebuildAutoplayOptions(); saveMeta(); });
         row.appendChild(nameInp);
 
@@ -4567,9 +4618,11 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         rm.innerHTML = icon('i-trash');
         rm.title = 'Slot entfernen';
         rm.setAttribute('aria-label', 'Slot ' + (idx + 1) + ' entfernen');
-        rm.disabled = !editMode || state.meta.slots.length <= 1;
+        // Slot 1 & 2 sind geschützt (Grund-Slots, z. B. Original/Live) — nur ab Slot 3 löschbar
+        rm.disabled = idx < 2;
+        if (idx < 2) rm.title = 'Slot 1 und 2 können nicht gelöscht werden';
         rm.addEventListener('click', async () => {
-          if (state.meta.slots.length <= 1) return;
+          if (idx < 2) return;
           const ok = await kpConfirm('Slot „' + (s.name || 'Slot') + '" entfernen? Die in diesem Slot zugeordneten Tracks werden aus allen Einträgen gelöst (die Dateien bleiben im Musikarchiv).');
           if (!ok) return;
           const sid = s.id;

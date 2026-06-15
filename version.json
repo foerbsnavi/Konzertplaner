@@ -1,7 +1,16 @@
 {
-    "version": "1.11.3",
+    "version": "1.11.4",
     "date": "2026-06-15",
     "changelog": [
+        {
+            "version": "1.11.4",
+            "date": "2026-06-15",
+            "changes": [
+                "Noten-Editor: Das Abspielen funktioniert jetzt — mit einem eingebauten, einfachen Melodie-Player (ohne externe Klänge, läuft auch offline).",
+                "Klarere Benennung: Der Button „+ Noten (PDF/Bild)“ heißt jetzt „PDF/Bild“ — so kommt man nicht mit dem Noteneditor durcheinander.",
+                "Track-Slots: Slots lassen sich in den Einstellungen jetzt zuverlässig anlegen und löschen. Die beiden Grund-Slots (1 und 2) sind geschützt und bleiben erhalten."
+            ]
+        },
         {
             "version": "1.11.3",
             "date": "2026-06-15",
