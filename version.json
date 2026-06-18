@@ -1,12 +1,12 @@
 {
-    "version": "1.11.7",
-    "date": "2026-06-15",
+    "version": "1.12.0",
+    "date": "2026-06-18",
     "changelog": [
         {
-            "version": "1.11.7",
-            "date": "2026-06-15",
+            "version": "1.12.0",
+            "date": "2026-06-18",
             "changes": [
-                "Aktualisierung"
+                "Neu: BPM pro Song. Neben „Notiz“, „PDF/Bild“ und „Noteneditor“ gibt es jetzt einen Knopf „BPM“. Ein Klick öffnet ein kleines Fenster, in dem du das Tempo (Schläge pro Minute) einträgst. Sobald ein Wert gesetzt ist, steht er direkt im Knopf (z. B. „120 BPM“) und bleibt auch beim reinen Ansehen sichtbar. Feld leeren und speichern entfernt die Angabe wieder; beim Duplizieren wird sie mitkopiert."
             ]
         },
         {

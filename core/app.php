@@ -374,6 +374,14 @@ function valid_entry_id(string $id): bool {
 function valid_rehearsal_id(string $id): bool {
     return (bool)preg_match('/^p_[a-z0-9]{4,16}$/', $id);
 }
+// BPM (Schläge pro Minute) eines Eintrags normalisieren: Ganzzahl 1–400, sonst 0 (= keine Angabe).
+function sanitize_bpm($v): int {
+    if (is_int($v) || is_float($v) || (is_string($v) && is_numeric($v))) {
+        $b = (int)round((float)$v);
+        if ($b >= 1 && $b <= 400) return $b;
+    }
+    return 0;
+}
 
 // ---------- Freigabe (Konzert teilen per Link + Passwort) ----------
 
@@ -783,6 +791,7 @@ function duplicate_concert(string $dir, string $baseDir, string $notesDir, strin
                 'manual_duration'  => 0.0,
                 'anchored_to_next' => false,
                 'status'           => 0,
+                'bpm'              => 0,
             ];
             continue;
         }
@@ -809,6 +818,7 @@ function duplicate_concert(string $dir, string $baseDir, string $notesDir, strin
             'manual_duration'  => (float)($e['manual_duration'] ?? 0),
             'anchored_to_next' => !empty($e['anchored_to_next']),
             'status'           => $copyStatus,
+            'bpm'              => sanitize_bpm($e['bpm'] ?? 0),
         ];
     }
     $nn = count($newEntries);
@@ -869,6 +879,7 @@ function duplicate_entry(string $dir, string $baseDir, string $notesDir, string 
             'manual_duration'  => 0.0,
             'anchored_to_next' => false,
             'status'           => 0,
+            'bpm'              => 0,
         ];
     } else {
         $newNoteFiles = [];
@@ -896,6 +907,7 @@ function duplicate_entry(string $dir, string $baseDir, string $notesDir, string 
             // (und „verankert" sich damit zum Duplikat — Gruppe wächst um 1).
             'anchored_to_next' => false,
             'status'           => $copyStatus,
+            'bpm'              => sanitize_bpm($src['bpm'] ?? 0),
         ];
     }
 
@@ -959,6 +971,7 @@ function clean_entries(array $rawEntries, array $validTracksFlip, string $baseDi
                 'manual_duration'  => 0.0,
                 'anchored_to_next' => false,
                 'status'           => 0,
+                'bpm'              => 0,
             ];
             continue;
         }
@@ -1004,6 +1017,7 @@ function clean_entries(array $rawEntries, array $validTracksFlip, string $baseDi
             'manual_duration'  => $manualDur,
             'anchored_to_next' => !empty($e['anchored_to_next']),
             'status'           => $status,
+            'bpm'              => sanitize_bpm($e['bpm'] ?? 0),
         ];
     }
     // Anker am Listenende ist bedeutungslos und wird zwangsweise gelöscht.
@@ -2615,6 +2629,20 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     </div>
   </div>
 
+  <!-- BPM-Modal -->
+  <div id="bpm-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="bpm-modal-title" hidden>
+    <div class="modal-inner">
+      <h2 id="bpm-modal-title">BPM</h2>
+      <label for="bpm-modal-input" class="bpm-modal-label">Schläge pro Minute (1–400)</label>
+      <input type="number" id="bpm-modal-input" class="bpm-modal-input" min="1" max="400" step="1"
+             inputmode="numeric" placeholder="z. B. 120">
+      <div class="modal-actions">
+        <button type="button" class="ghost" id="bpm-modal-cancel">Schließen</button>
+        <button type="button" class="primary" id="bpm-modal-save">Speichern</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Noten-Editor-Modal (abcjs) -->
   <div id="sheet-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="sheet-modal-title" hidden>
     <div class="modal-inner modal-inner-wide">
@@ -2835,6 +2863,11 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       noteModalTitle:  document.getElementById('note-modal-title'),
       noteModalSave:   document.getElementById('note-modal-save'),
       noteModalCancel: document.getElementById('note-modal-cancel'),
+      bpmModal:        document.getElementById('bpm-modal'),
+      bpmModalInput:   document.getElementById('bpm-modal-input'),
+      bpmModalTitle:   document.getElementById('bpm-modal-title'),
+      bpmModalSave:    document.getElementById('bpm-modal-save'),
+      bpmModalCancel:  document.getElementById('bpm-modal-cancel'),
       sheetModal:      document.getElementById('sheet-modal'),
       sheetTitle:      document.getElementById('sheet-modal-title'),
       sheetAbc:        document.getElementById('sheet-abc'),
@@ -3952,6 +3985,53 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       });
     }
 
+    // ---------- BPM-Editor (Popup, einzelnes Zahlenfeld) ----------
+    let bpmModalEntry = null;
+    let bpmModalOpener = null;
+    function openBpmModal(entry) {
+      bpmModalEntry = entry;
+      bpmModalOpener = document.activeElement;
+      const editable = CAN_EDIT_PROGRAM;
+      const v = parseInt(entry.bpm, 10) || 0;
+      els.bpmModalInput.value = v ? String(v) : '';
+      els.bpmModalInput.readOnly = !editable;
+      els.bpmModalSave.hidden = !editable;
+      els.bpmModalTitle.textContent = (entry.title && entry.type !== 'heading')
+        ? 'BPM — ' + entry.title : 'BPM';
+      els.bpmModal.hidden = false;
+      setTimeout(() => { (editable ? els.bpmModalInput : els.bpmModalCancel).focus(); }, 0);
+    }
+    function closeBpmModal() {
+      els.bpmModal.hidden = true;
+      bpmModalEntry = null;
+      // Fokus zum auslösenden Button zurückgeben (nur wenn er noch im DOM ist;
+      // nach dem Speichern baut render() die Liste neu auf).
+      if (bpmModalOpener && bpmModalOpener.isConnected) bpmModalOpener.focus();
+      bpmModalOpener = null;
+    }
+    function saveBpmModal() {
+      if (!bpmModalEntry || !CAN_EDIT_PROGRAM) { closeBpmModal(); return; }
+      // Leeres/ungültiges Feld = keine Angabe (0). Sonst auf 1–400 begrenzen.
+      let v = parseInt(els.bpmModalInput.value, 10);
+      if (!Number.isFinite(v) || v < 1) v = 0;
+      else if (v > 400) v = 400;
+      bpmModalEntry.bpm = v;
+      save();
+      closeBpmModal();
+      render();
+    }
+    if (els.bpmModal) {
+      els.bpmModalSave.addEventListener('click', saveBpmModal);
+      els.bpmModalCancel.addEventListener('click', closeBpmModal);
+      els.bpmModal.addEventListener('click', (ev) => { if (ev.target === els.bpmModal) closeBpmModal(); });
+      els.bpmModalInput.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); saveBpmModal(); }
+      });
+      document.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape' && !els.bpmModal.hidden) closeBpmModal();
+      });
+    }
+
     // ---------- Noten-Editor (Popup, abcjs) ----------
     const SHEET_TEMPLATE = 'X:1\nM:4/4\nL:1/4\nK:C\nC D E F | G A B c |\n';
     let sheetEntry = null;
@@ -4213,6 +4293,17 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         wrap.appendChild(sheetBtn);
       }
 
+      // BPM-Button — immer sichtbar. Ohne Wert „BPM“, mit Wert „120 BPM“.
+      // Öffnet ein Popup mit einem einzelnen Zahlenfeld (leeres Feld = entfernen).
+      const bpmVal = parseInt(entry.bpm, 10) || 0;
+      const bpmBtn = document.createElement('button');
+      bpmBtn.type = 'button';
+      bpmBtn.className = 'upload-btn note-bpm-btn' + (bpmVal ? ' has-value' : '');
+      bpmBtn.innerHTML = icon('i-edit') + ' ' + (bpmVal ? (bpmVal + ' BPM') : 'BPM');
+      bpmBtn.title = bpmVal ? ('Tempo: ' + bpmVal + ' BPM — ändern') : 'Tempo (BPM) angeben';
+      bpmBtn.addEventListener('click', () => openBpmModal(entry));
+      wrap.appendChild(bpmBtn);
+
       return wrap;
     }
 
@@ -4311,7 +4402,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     els.addBtn.addEventListener('click', () => {
       // Letzten bisherigen Eintrag entkoppeln, falls ein Anker zum (jetzt zu verschiebenden) Listenende stand.
       sanitizeAnchors();
-      state.entries.push({ id: uid(), type: '', title: '', notes: '', abc: '', tracks: {}, note_files: [], manual_duration: 0, anchored_to_next: false, status: 0 });
+      state.entries.push({ id: uid(), type: '', title: '', notes: '', abc: '', tracks: {}, note_files: [], manual_duration: 0, anchored_to_next: false, status: 0, bpm: 0 });
       render();
       save();
       // Fokus auf den Titel des neu angelegten Eintrags (immer der letzte .entry, nicht der Anker-Gap).
@@ -4321,7 +4412,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
 
     els.addHeadingBtn?.addEventListener('click', () => {
       sanitizeAnchors();
-      state.entries.push({ id: uid(), type: 'heading', title: '', notes: '', abc: '', tracks: {}, note_files: [], manual_duration: 0, anchored_to_next: false, status: 0 });
+      state.entries.push({ id: uid(), type: 'heading', title: '', notes: '', abc: '', tracks: {}, note_files: [], manual_duration: 0, anchored_to_next: false, status: 0, bpm: 0 });
       render();
       save();
       const newHeading = els.entries.querySelector('.entry.heading:last-of-type');

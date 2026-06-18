@@ -601,6 +601,33 @@ body.edit-mode .entry-status-label { display: none; }
 .note-modal-text:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
 .note-modal-text[readonly] { background: var(--panel); cursor: default; }
 
+/* BPM-Button: liegt mit Wert „gefüllt“ vor (durchgezogener Rand, Akzentfarbe) */
+.note-bpm-btn.has-value {
+  color: var(--text);
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+/* BPM-Popup: einzelnes Zahlenfeld */
+.bpm-modal-label {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.bpm-modal-input {
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+}
+.bpm-modal-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+.bpm-modal-input[readonly] { background: var(--panel); cursor: default; }
+
 /* ── Noten-Editor (abcjs) ───────────────────────────────────────────── */
 .sheet-toolbar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
 .sheet-toolbar button {
@@ -1228,6 +1255,12 @@ body:not(.edit-mode) .upload-btn,
 body:not(.edit-mode) .manual-dur,
 body:not(.edit-mode) #pool-section {
   display: none !important;
+}
+
+/* Der BPM-Button bleibt MIT Wert auch im Lesemodus sichtbar — er trägt das Tempo
+   im Namen (wie die Notiz-/Noten-Chips). Ohne Wert bleibt er edit-only. */
+body:not(.edit-mode) .note-bpm-btn.has-value {
+  display: inline-flex !important;
 }
 
 /* Im Read-Only-Modus: Einträge ohne Handle-Spalte und Actions-Spalte */
