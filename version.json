@@ -1,7 +1,21 @@
 {
-    "version": "1.12.0",
-    "date": "2026-06-18",
+    "version": "1.12.2",
+    "date": "2026-06-26",
     "changelog": [
+        {
+            "version": "1.12.2",
+            "date": "2026-06-26",
+            "changes": [
+                "Fehler behoben: Wenn man die Datei aus einem bereits belegten Track-Slot entfernt und danach eine andere Datei in denselben Slot zieht, wurde diese nach dem Neuladen nicht gespeichert — der Slot blieb leer, obwohl scheinbar gespeichert wurde. Ursache war ein technischer Sonderfall bei leeren Slots. Das Zuordnen funktioniert jetzt in allen Fällen zuverlässig."
+            ]
+        },
+        {
+            "version": "1.12.1",
+            "date": "2026-06-26",
+            "changes": [
+                "Fehler behoben: Wenn mehrere Personen ein Konzert gleichzeitig geöffnet hatten — oder auch nur ein zweiter Tab nebenher lief — konnte ein gerade zugewiesener Track nach dem Neuladen wieder verschwinden. Ein im Hintergrund laufendes automatisches Speichern (z. B. beim Abspielen oder beim Ermitteln der Track-Längen) überschrieb die Änderung mit einem älteren Stand. Das Programm ist jetzt gegen solches gegenseitige Überschreiben abgesichert: Track-Längen werden getrennt gespeichert und fassen das Programm nicht mehr an, und wenn jemand anderes zwischenzeitlich gespeichert hat, erscheint ein Hinweis zum Neuladen statt eines stillen Datenverlusts."
+            ]
+        },
         {
             "version": "1.12.0",
             "date": "2026-06-18",

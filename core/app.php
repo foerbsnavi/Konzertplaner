@@ -610,17 +610,24 @@ function load_concert(string $dir, string $id): ?array {
     return $data;
 }
 
-function save_concert(string $dir, array $concert): bool {
+// $concert wird per Referenz übergeben, damit Aufrufer nach dem Speichern den
+// frisch gesetzten updated_at-Stempel auslesen können (optimistisches Sperren).
+// $touch=false behält den vorhandenen updated_at bei — für reine Cache-Schreibvorgänge
+// (Track-Längen), die die Nebenläufigkeits-Zeitlinie nicht verschieben dürfen.
+// $updateIndex=false überspringt die Neuberechnung von _index.json — sinnvoll, wenn sich
+// kein indexrelevantes Feld geändert hat (z. B. nur die Track-Längen): spart bei jedem
+// passiven Längen-Save das erneute Sortieren+Schreiben der gesamten Konzertliste.
+function save_concert(string $dir, array &$concert, bool $touch = true, bool $updateIndex = true): bool {
     if (!valid_concert_id((string)($concert['id'] ?? ''))) return false;
     ensure_dir($dir);
-    $concert['updated_at'] = time();
+    if ($touch || !isset($concert['updated_at'])) $concert['updated_at'] = time();
     $file = concert_file($dir, $concert['id']);
     $tmp  = $file . '.tmp';
     $json = json_encode($concert, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($json === false) return false;
     if (@file_put_contents($tmp, $json, LOCK_EX) === false) return false;
     if (!@rename($tmp, $file)) return false;
-    update_concerts_index($dir, $concert);
+    if ($updateIndex) update_concerts_index($dir, $concert);
     return true;
 }
 
@@ -1035,7 +1042,9 @@ function clean_entries(array $rawEntries, array $validTracksFlip, string $baseDi
 function clean_durations(array $rawDur, array $validTracksFlip): array {
     $clean = [];
     foreach ($rawDur as $k => $v) {
-        if (is_string($k) && isset($validTracksFlip[$k]) && (is_float($v) || is_int($v))) {
+        // Nur positive, endliche Längen — schützt den Cache vor 0/negativen/NaN-Werten.
+        if (is_string($k) && isset($validTracksFlip[$k]) && (is_float($v) || is_int($v))
+            && is_finite((float)$v) && (float)$v > 0) {
             $clean[$k] = (float)$v;
         }
     }
@@ -1241,7 +1250,7 @@ if (!$isLoggedIn) {
             // track_delete bewusst NICHT: das Löschen aus dem gemeinsamen Track-Pool
             // beträfe auch andere Konzerte des Besitzers — bleibt Besitzer-Sache.
             array_push($shareAllowed,
-                'save', 'concert_save_meta', 'entry_duplicate',
+                'save', 'durations_save', 'concert_save_meta', 'entry_duplicate',
                 'upload_track', 'upload_note', 'delete_note');
         }
         $shareOk = $shareGranted
@@ -1623,12 +1632,52 @@ if ($action === 'save' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_array($body) || !isset($body['entries']) || !is_array($body['entries'])) {
         json_response(['ok' => false, 'error' => 'Ungültiges Format'], 400);
     }
+    // Optimistisches Sperren: hat jemand anderes seit dem Laden dieses Tabs
+    // gespeichert, ist der mitgeschickte Stempel älter als der aktuelle Stand.
+    // Dann NICHT überschreiben, sondern den Tab zum Neuladen auffordern —
+    // verhindert stillen Datenverlust bei gleichzeitigem Bearbeiten.
+    $base = isset($body['base_updated_at']) ? (int)$body['base_updated_at'] : 0;
+    if ($base > 0 && (int)($c['updated_at'] ?? 0) > $base) {
+        json_response([
+            'ok' => false,
+            'conflict' => true,
+            'updated_at' => (int)($c['updated_at'] ?? 0),
+            'error' => 'Das Konzert wurde inzwischen an anderer Stelle geändert. Bitte neu laden.',
+        ], 409);
+    }
     $validTracks = array_flip(list_tracks($TRACKS_DIR));
     $c['entries']   = clean_entries($body['entries'], $validTracks, $DATA_DIR, $NOTES_DIR, array_column($c['slots'], 'id'));
     $c['durations'] = isset($body['durations']) && is_array($body['durations'])
         ? clean_durations($body['durations'], $validTracks)
         : ($c['durations'] ?? []);
     if (!save_concert($CONCERTS_DIR, $c)) {
+        json_response(['ok' => false, 'error' => 'Speichern fehlgeschlagen'], 500);
+    }
+    json_response(['ok' => true, 'updated_at' => (int)($c['updated_at'] ?? time())]);
+}
+
+// Speichert ausschließlich die Track-Längen (Cache aus den Audio-Metadaten).
+// Bewusst getrennt von 'save': diese Aktion läuft passiv (Längen-Vorladen,
+// Abspielen) und darf NIEMALS die Eintrags-Liste anderer Tabs überschreiben.
+if ($action === 'durations_save' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($concertId === '') json_response(['ok' => false, 'error' => 'Konzert-ID fehlt'], 400);
+    $c = load_concert($CONCERTS_DIR, $concertId);
+    if (!$c) json_response(['ok' => false, 'error' => 'Konzert nicht gefunden'], 404);
+    $body = json_decode(file_get_contents('php://input'), true);
+    if (!is_array($body) || !isset($body['durations']) || !is_array($body['durations'])) {
+        json_response(['ok' => false, 'error' => 'Ungültiges Format'], 400);
+    }
+    $validTracks = array_flip(list_tracks($TRACKS_DIR));
+    // Neue Längen über den vorhandenen Stand legen, dann EINMAL bereinigen —
+    // filtert ungültige/veraltete Werte aus beiden Quellen. Einträge bleiben unberührt.
+    $merged = is_array($c['durations'] ?? null) ? $c['durations'] : [];
+    foreach ($body['durations'] as $name => $dur) {
+        $merged[$name] = $dur;
+    }
+    $c['durations'] = clean_durations($merged, $validTracks);
+    // $touch=false: updated_at bleibt; $updateIndex=false: Längen sind nicht im
+    // Index-Summary → kein Neu-Sortieren/Schreiben der Konzertliste nötig.
+    if (!save_concert($CONCERTS_DIR, $c, false, false)) {
         json_response(['ok' => false, 'error' => 'Speichern fehlgeschlagen'], 500);
     }
     json_response(['ok' => true]);
@@ -1641,7 +1690,7 @@ if ($action === 'entry_duplicate' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!valid_entry_id($entryId)) json_response(['ok' => false, 'error' => 'Ungültige Eintrags-ID'], 400);
     $updated = duplicate_entry($CONCERTS_DIR, $DATA_DIR, $NOTES_DIR, $concertId, $entryId);
     if (!$updated) json_response(['ok' => false, 'error' => 'Duplizieren fehlgeschlagen'], 500);
-    json_response(['ok' => true, 'entries' => $updated['entries'], 'durations' => $updated['durations'] ?? []]);
+    json_response(['ok' => true, 'entries' => $updated['entries'], 'durations' => $updated['durations'] ?? [], 'updated_at' => (int)($updated['updated_at'] ?? time())]);
 }
 
 if ($action === 'upload_note' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -2827,7 +2876,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
 
     const MARKER_LABEL_DEFAULTS = {yellow:'Gelb', green:'Grün', purple:'Lila', blue:'Blau', red:'Rot'};
     const state = {
-      meta: { id: KONZERT_ID, name: '', date: '', description: '', rehearsals: [], markerLabels: {}, slots: [] },
+      meta: { id: KONZERT_ID, name: '', date: '', description: '', rehearsals: [], markerLabels: {}, slots: [], updatedAt: 0 },
       entries: [], durations: {}, available: [], trackMeta: {}, currentTrack: null,
       currentEntryId: null,
       markersByEntry: {},
@@ -2993,6 +3042,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
           rehearsals:  Array.isArray(data.rehearsals) ? data.rehearsals : [],
           markerLabels: (data.marker_labels && typeof data.marker_labels === 'object') ? data.marker_labels : {},
           slots: Array.isArray(data.slots) ? data.slots : [],
+          updatedAt: data.updated_at || 0,
         };
         state.entries   = data.entries || [];
         state.durations = data.durations || {};
@@ -3060,27 +3110,66 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
 
     // ---------- Persistenz ----------
     let saveTimer = null;
-    let savePending = false;
+    let saveInFlight = false;   // verhindert überlappende Speicherungen desselben Tabs
+    let saveQueued = false;     // Änderung während einer laufenden Speicherung → danach nachspeichern
     function save(immediate = false) {
       if (!CAN_EDIT_PROGRAM) return; // ohne Bearbeitungsrecht nicht speichern
       clearTimeout(saveTimer);
       const doSave = () => {
-        savePending = true;
+        // Nie zwei Speicherungen gleichzeitig: sonst könnte die zweite mit einem
+        // veralteten Stempel laufen und einen Konflikt mit dem eigenen Tab auslösen.
+        if (saveInFlight) { saveQueued = true; return; }
+        saveInFlight = true;
         flashStatus('Speichere…', 0);
+        const afterDone = () => {
+          saveInFlight = false;
+          if (saveQueued) { saveQueued = false; doSave(); } // zwischenzeitliche Änderung nachreichen
+        };
         fetch('?action=save' + API_K, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ entries: state.entries, durations: state.durations })
+          body: JSON.stringify({
+            entries: state.entries,
+            durations: state.durations,
+            base_updated_at: state.meta.updatedAt || 0,
+          })
         })
         .then(r => r.json())
         .then(d => {
-          savePending = false;
+          saveInFlight = false;
+          if (d && d.conflict) { saveQueued = false; handleSaveConflict(); return; }
+          if (d && d.ok && typeof d.updated_at !== 'undefined') state.meta.updatedAt = d.updated_at;
           flashStatus(d.ok ? 'Gespeichert' : 'Fehler', d.ok ? 1200 : 0);
+          if (saveQueued) { saveQueued = false; doSave(); }
         })
-        .catch(() => { savePending = false; flashStatus('Fehler', 0); });
+        .catch(() => { flashStatus('Fehler', 0); afterDone(); });
       };
       if (immediate) doSave();
       else saveTimer = setTimeout(doSave, 400);
+    }
+
+    // Speichert NUR die Track-Längen (Cache). Läuft passiv (Längen-Vorladen,
+    // Abspielen) und fasst die Eintrags-Liste bewusst nicht an — so kann ein
+    // nur geöffneter Tab die Einträge eines anderen nicht überschreiben.
+    function saveDurations() {
+      if (!CAN_EDIT_PROGRAM) return;
+      fetch('?action=durations_save' + API_K, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ durations: state.durations })
+      }).catch(() => {});
+    }
+
+    // Konflikt: jemand anderes hat seit dem Laden dieses Tabs gespeichert.
+    // Statt still zu überschreiben, den Nutzer informieren und zum Neuladen anbieten.
+    let conflictPrompted = false;
+    async function handleSaveConflict() {
+      flashStatus('Nicht gespeichert — anderswo geändert', 0);
+      if (conflictPrompted) return;
+      conflictPrompted = true;
+      const reload = await kpConfirm('Dieses Konzert wurde gerade an anderer Stelle geändert (z. B. von einem Bandkollegen). Deine letzte Änderung wurde nicht gespeichert.\n\nJetzt neu laden, um den aktuellen Stand zu holen?');
+      if (reload) { location.reload(); return; }
+      conflictPrompted = false;
     }
 
     let metaSaveTimer = null;
@@ -3113,6 +3202,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
               rehearsals:  d.concert.rehearsals || [],
               markerLabels: d.concert.marker_labels || {},
               slots: Array.isArray(d.concert.slots) ? d.concert.slots : (state.meta.slots || []),
+              updatedAt: d.concert.updated_at || 0,
             };
             render();
             rebuildAutoplayOptions();
@@ -3250,8 +3340,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       let i = 0;
       const next = () => {
         if (i >= missing.length) {
-          if (!savePending) save(true);
-          else save();
+          saveDurations();
           return;
         }
         const t = missing[i++];
@@ -4349,6 +4438,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         if (!d.ok) { kpAlert('Fehler: ' + (d.error || 'Duplizieren fehlgeschlagen')); flashStatus('', 0); return; }
         state.entries = d.entries || [];
         if (d.durations) state.durations = d.durations;
+        if (typeof d.updated_at !== 'undefined') state.meta.updatedAt = d.updated_at;
         render();
         flashStatus('Kopie eingefügt', 1200);
       })
@@ -4419,18 +4509,26 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       if (newHeading) newHeading.querySelector('.heading-title')?.focus();
     });
 
+    // Stellt sicher, dass tracks ein echtes Objekt ist. Ein geleerter Slot kommt
+    // vom Server als leeres JSON-Array [] zurück (PHP wandelt leeres {} beim
+    // json_decode/encode in []); ein String-Key auf einem JS-Array würde von
+    // JSON.stringify lautlos verworfen → der Track ginge beim Speichern verloren.
+    function tracksObj(entry) {
+      if (!entry.tracks || Array.isArray(entry.tracks)) entry.tracks = {};
+      return entry.tracks;
+    }
     function assignTrack(trackName, toEntryId, toSlot, fromEntryId, fromSlot) {
       const target = state.entries.find(e => e.id === toEntryId);
       if (!target) return;
-      if (!target.tracks) target.tracks = {};
+      const targetTracks = tracksObj(target);
       if (fromEntryId && fromSlot) {
         const source = state.entries.find(e => e.id === fromEntryId);
         if (source) {
-          if (!source.tracks) source.tracks = {};
-          const oldTargetTrack = target.tracks[toSlot] || null;
-          target.tracks[toSlot] = trackName;
-          if (oldTargetTrack) source.tracks[fromSlot] = oldTargetTrack;  // Tausch
-          else delete source.tracks[fromSlot];                          // Verschiebung
+          const sourceTracks = tracksObj(source);
+          const oldTargetTrack = targetTracks[toSlot] || null;
+          targetTracks[toSlot] = trackName;
+          if (oldTargetTrack) sourceTracks[fromSlot] = oldTargetTrack;  // Tausch
+          else delete sourceTracks[fromSlot];                          // Verschiebung
           autofillTitle(target);
           autofillTitle(source);
           render();
@@ -4438,7 +4536,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
           return;
         }
       }
-      target.tracks[toSlot] = trackName;
+      targetTracks[toSlot] = trackName;
       autofillTitle(target);
       render();
       save();
@@ -4942,7 +5040,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
           state.durations[name] = d;
           updateTotal();
           updateInlineDurationForTrack(name, d);
-          save();
+          saveDurations();
         }
         state.currentDuration = d || 0;
         // Marker gibt es nur für Programm-Einträge — bei Pool-Tracks bleibt der Toggle gesperrt
@@ -5723,8 +5821,11 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     }
     function beaconSaveEntries() {
       try {
+        // base_updated_at mitschicken: hat zwischenzeitlich jemand anderes
+        // gespeichert, verwirft der Server diesen Beacon (409) statt den neueren
+        // Stand zu überschreiben. Die Antwort interessiert beim Unload nicht.
         const blob = new Blob(
-          [JSON.stringify({ entries: state.entries, durations: state.durations })],
+          [JSON.stringify({ entries: state.entries, durations: state.durations, base_updated_at: state.meta.updatedAt || 0 })],
           { type: 'application/json' }
         );
         navigator.sendBeacon('?action=save' + API_K, blob);
