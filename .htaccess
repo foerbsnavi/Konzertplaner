@@ -20,13 +20,21 @@
   </IfModule>
 </FilesMatch>
 
-# Caching: HTML/PHP nicht, Assets ja
+# Caching: HTML/PHP nicht, Assets ja. CSS/JS tragen einen ?v=-Cache-Buster
+# (Änderungsdatum), dürfen also lange gecacht werden; Fonts ändern sich nie.
 <IfModule mod_expires.c>
   ExpiresActive on
   ExpiresByType image/svg+xml "access plus 7 days"
   ExpiresByType image/png "access plus 7 days"
   ExpiresByType image/x-icon "access plus 7 days"
-  ExpiresByType text/css "access plus 1 day"
-  ExpiresByType application/javascript "access plus 1 day"
+  ExpiresByType text/css "access plus 30 days"
+  ExpiresByType application/javascript "access plus 30 days"
   ExpiresByType audio/mpeg "access plus 30 days"
+  ExpiresByType font/ttf "access plus 365 days"
+  ExpiresByType application/x-font-ttf "access plus 365 days"
+</IfModule>
+
+# Kompression für Text-Assets (die 500-KB-Noten-Bibliothek schrumpft damit erheblich)
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
 </IfModule>

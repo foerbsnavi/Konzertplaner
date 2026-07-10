@@ -1,7 +1,20 @@
 {
-    "version": "1.12.2",
-    "date": "2026-06-26",
+    "version": "1.13.0",
+    "date": "2026-07-10",
     "changelog": [
+        {
+            "version": "1.13.0",
+            "date": "2026-07-10",
+            "changes": [
+                "Der Player sagt jetzt Bescheid, wenn ein Track nicht geladen werden kann (z. B. Datei fehlt oder keine Berechtigung) — vorher passierte beim Klick auf Play einfach nichts. Bei aktivem Auto-Play wird der nächste abspielbare Track versucht.",
+                "Fehler behoben: In der Freigabe-Ansicht mit Marker- oder Bearbeitungs-Recht wurden gesetzte Zeit-Marker nie gespeichert — die Anfrage wurde ohne Freigabe-Kennung geschickt und vom Server abgelehnt. Marker von Bandkollegen kommen jetzt an.",
+                "Deutlich robusterer Schutz vor gegenseitigem Überschreiben: Alle Speichervorgänge desselben Konzerts (Programm, Eckdaten, Track-Längen, Duplizieren, Freigabe-Einstellungen) laufen jetzt über eine Sperre nacheinander statt gleichzeitig, und Konflikte werden auch dann erkannt, wenn zwei Speicherungen in derselben Sekunde passieren.",
+                "Duplizieren verbessert: Zeit-Marker werden beim Duplizieren von Songs und ganzen Konzerten jetzt mitkopiert, und eine gerade laufende Speicherung (z. B. ein eben getippter Titel) wird vor dem Duplizieren abgeschlossen statt überschrieben.",
+                "Die Konzert-Detailseite lädt spürbar schneller: Die Noten-Editor-Bibliothek (ein halbes Megabyte) wird erst geladen, wenn der Noten-Editor wirklich geöffnet wird. Zusätzlich werden Textdateien jetzt komprimiert übertragen und Schriften/Assets besser gecacht.",
+                "Bedienung & Barrierefreiheit: Die Popup-Fenster für Notiz, BPM und Noten halten den Tastatur-Fokus jetzt im Fenster und geben ihn beim Schließen an den auslösenden Knopf zurück.",
+                "Sicherheits-Härtung: zusätzliche Herkunfts-Prüfung für alle Schreib-Anfragen, private Konzertdaten werden vom Browser nicht mehr zwischengespeichert, und ein Datenverlust-Kantenfall bei ganz alten, teilmigrierten Konzerten (Track-Zuordnungen im Alt-Format) ist behoben."
+            ]
+        },
         {
             "version": "1.12.2",
             "date": "2026-06-26",
