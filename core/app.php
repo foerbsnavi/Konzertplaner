@@ -2850,9 +2850,10 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
           </details>
         </div>
         <div class="sheet-preview-col">
-          <!-- bewusst KEIN aria-live: das SVG-Notenbild würde Screenreadern
-               sonst bei jedem Tastenanschlag sinnfreie Ansagen erzeugen -->
-          <div id="sheet-preview" class="sheet-preview"></div>
+          <!-- aria-hidden: das SVG-Notenbild ist rein visuell und redundant zum
+               zugänglichen ABC-Quelltextfeld; aria-live würde Screenreadern bei
+               jedem Tastenanschlag sinnfreie Ansagen erzeugen -->
+          <div id="sheet-preview" class="sheet-preview" aria-hidden="true"></div>
           <button type="button" class="ghost sheet-play-btn" id="sheet-play">
             <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>
             Abspielen
@@ -2976,7 +2977,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         $kpAssetBase = './' . $kpAssetBase;
     }
     echo htmlspecialchars($kpAssetBase, ENT_QUOTES, 'UTF-8');
-  ?>/wavesurfer.esm.js';
+  ?>/wavesurfer.esm.js?v=<?= $ASSET_VER ?>';
 
   (function () {
     'use strict';

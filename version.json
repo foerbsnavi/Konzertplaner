@@ -1,7 +1,14 @@
 {
-    "version": "1.13.0",
+    "version": "1.13.1",
     "date": "2026-07-10",
     "changelog": [
+        {
+            "version": "1.13.1",
+            "date": "2026-07-10",
+            "changes": [
+                "Feinschliff zum 1.13.0-Update: Der Audio-Player-Baustein bekommt jetzt ebenfalls eine Versions-Kennung in der Adresse (verhindert, dass Browser nach künftigen Updates bis zu 30 Tage eine veraltete Player-Version aus dem Cache laden), Track-Dateien werden nur noch einen Tag zwischengespeichert (wer eine Datei unter gleichem Namen ersetzt, hört spätestens am Folgetag sicher die neue Fassung), und das Notenbild im Noten-Editor wird für Screenreader ausgeblendet (es ist rein visuell — der Notentext selbst bleibt voll zugänglich)."
+            ]
+        },
         {
             "version": "1.13.0",
             "date": "2026-07-10",

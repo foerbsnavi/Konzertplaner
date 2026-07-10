@@ -2,6 +2,9 @@
 
 Alle Versionen des Konzertplaners. Installierte Versionen aktualisieren sich über das eingebaute Update-System (Hauptseite → „Auf Updates prüfen“).
 
+## 1.13.1 — 10.07.2026
+- Feinschliff zum 1.13.0-Update: Der Audio-Player-Baustein bekommt jetzt ebenfalls eine Versions-Kennung in der Adresse (verhindert, dass Browser nach künftigen Updates bis zu 30 Tage eine veraltete Player-Version aus dem Cache laden), Track-Dateien werden nur noch einen Tag zwischengespeichert (wer eine Datei unter gleichem Namen ersetzt, hört spätestens am Folgetag sicher die neue Fassung), und das Notenbild im Noten-Editor wird für Screenreader ausgeblendet (es ist rein visuell — der Notentext selbst bleibt voll zugänglich).
+
 ## 1.13.0 — 10.07.2026
 - Der Player sagt jetzt Bescheid, wenn ein Track nicht geladen werden kann (z. B. Datei fehlt oder keine Berechtigung) — vorher passierte beim Klick auf Play einfach nichts. Bei aktivem Auto-Play wird der nächste abspielbare Track versucht.
 - Fehler behoben: In der Freigabe-Ansicht mit Marker- oder Bearbeitungs-Recht wurden gesetzte Zeit-Marker nie gespeichert — die Anfrage wurde ohne Freigabe-Kennung geschickt und vom Server abgelehnt. Marker von Bandkollegen kommen jetzt an.
