@@ -538,8 +538,9 @@ function share_attempt_update(string $dataDir, string $token, string $modus): in
 
 // Exponentieller Lock für den Admin-Login (analog share_attempt_update):
 // schützt gegen parallelisiertes Passwort-Raten, da sleep() nur den einzelnen
-// Request bremst. Schlüssel = Client-IP + User-Agent, abgelegt im geschützten
-// config/-Ordner. Liefert verbleibende Sperrsekunden (0 = frei).
+// Request bremst. Schlüssel = NUR die Client-IP — der User-Agent ist vom
+// Angreifer frei wählbar und würde pro Versuch einen frischen Zähler liefern.
+// Abgelegt im geschützten config/-Ordner. Liefert verbleibende Sperrsekunden (0 = frei).
 function kp_login_attempt(string $modus): int {
     $base = defined('KP_CONFIG_DIR') ? rtrim(KP_CONFIG_DIR, '/\\') : sys_get_temp_dir();
     $file = $base . '/login_attempts.json';
@@ -551,7 +552,7 @@ function kp_login_attempt(string $modus): int {
     }
     $data = json_decode((string)stream_get_contents($fh), true);
     if (!is_array($data)) $data = [];
-    $key = sha1(($_SERVER['REMOTE_ADDR'] ?? '') . '|' . ($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    $key = sha1((string)($_SERVER['REMOTE_ADDR'] ?? ''));
     $e = is_array($data[$key] ?? null) ? $data[$key] : ['fails' => 0, 'lock_until' => 0];
     $rest = max(0, (int)$e['lock_until'] - time());
     if ($modus === 'fail') {
@@ -723,6 +724,22 @@ function concerts_index_file(string $dir): string {
     return $dir . '/_index.json';
 }
 
+// Serialisiert Read-Modify-Write-Zugriffe auf _index.json. Der Konzert-Lock
+// greift nur pro Konzert — zwei gleichzeitige Saves VERSCHIEDENER Konzerte
+// würden sich sonst gegenseitig Index-Einträge wegschreiben.
+function kp_index_lock(string $dir) {
+    ensure_dir($dir);
+    $h = @fopen($dir . '/.index.lock', 'c');
+    if ($h) @flock($h, LOCK_EX);
+    return $h;
+}
+function kp_index_unlock($h): void {
+    if ($h) {
+        @flock($h, LOCK_UN);
+        fclose($h);
+    }
+}
+
 function sort_concerts(array &$list): void {
     usort($list, static function ($a, $b) {
         return strcoll(
@@ -751,6 +768,7 @@ function write_concerts_index(string $dir, array $list): void {
 }
 
 function update_concerts_index(string $dir, array $concert): void {
+    $lk = kp_index_lock($dir);
     $list = read_concerts_index($dir) ?? [];
     $found = false;
     foreach ($list as &$entry) {
@@ -764,12 +782,15 @@ function update_concerts_index(string $dir, array $concert): void {
     if (!$found) $list[] = concert_summary($concert);
     sort_concerts($list);
     write_concerts_index($dir, $list);
+    kp_index_unlock($lk);
 }
 
 function remove_from_concerts_index(string $dir, string $id): void {
+    $lk = kp_index_lock($dir);
     $list = read_concerts_index($dir) ?? [];
     $list = array_values(array_filter($list, static fn($e) => ($e['id'] ?? '') !== $id));
     write_concerts_index($dir, $list);
+    kp_index_unlock($lk);
 }
 
 function rebuild_concerts_index(string $dir): array {
@@ -804,18 +825,25 @@ function list_concerts(string $dir): array {
     return rebuild_concerts_index($dir);
 }
 
-function delete_concert_files(string $dir, string $baseDir, string $notesDir, string $id): bool {
+function delete_concert_files(string $dir, string $baseDir, string $notesDir, string $metaDir, string $id): bool {
     if (!valid_concert_id($id)) return false;
     $c = load_concert($dir, $id);
     if (!$c) return false;
-    // Notendateien dieses Konzerts löschen
+    // Notendateien + Marker-Dateien dieses Konzerts löschen (sonst sammeln
+    // sich verwaiste entry_*.json in tracks_meta/ für immer an)
     foreach ($c['entries'] as $e) {
+        if (!is_array($e)) continue;
         $paths = is_array($e['note_files'] ?? null) ? $e['note_files'] : [];
         foreach ($paths as $p) {
             if (!is_string($p)) continue;
             if (!note_path_is_safe($p, $baseDir, $notesDir)) continue;
             $real = realpath($baseDir . '/' . $p);
             if ($real !== false && is_file($real)) @unlink($real);
+        }
+        $eid = (string)($e['id'] ?? '');
+        if (valid_entry_id($eid)) {
+            $mf = entry_meta_path($metaDir, $eid);
+            if (is_file($mf)) @unlink($mf);
         }
     }
     // Konzert-JSON löschen
@@ -847,15 +875,14 @@ function copy_note_file(string $baseDir, string $notesDir, string $relSrc, strin
     return 'notes/' . basename($target);
 }
 
-// Erstellt eine vollständige Kopie inkl. Notendateien. Eintrags-IDs werden neu vergeben.
-function duplicate_concert(string $dir, string $baseDir, string $notesDir, string $srcId): ?array {
-    $src = load_concert($dir, $srcId);
-    if (!$src) return null;
-    $newId = gen_id('k');
-    while (is_file(concert_file($dir, $newId))) $newId = gen_id('k');
-
+// Kopiert eine Eintragsliste „tief": neue Eintrags-IDs, Notendateien physisch
+// kopiert, Zeit-Marker unter der neuen ID mitgeführt. Grundlage für Duplizieren
+// UND Backups — beide brauchen eigenständige Kopien, sonst zerstört das spätere
+// Löschen einer Notendatei oder Ändern eines Markers im Original auch die Kopie.
+function copy_entries_deep(array $entries, string $baseDir, string $notesDir): array {
     $newEntries = [];
-    foreach ($src['entries'] as $e) {
+    foreach ($entries as $e) {
+        if (!is_array($e)) continue;
         $newEntryId = gen_id('e');
         if (($e['type'] ?? '') === 'heading') {
             $newEntries[] = [
@@ -899,12 +926,23 @@ function duplicate_concert(string $dir, string $baseDir, string $notesDir, strin
             'bpm'              => sanitize_bpm($e['bpm'] ?? 0),
         ];
         // Zeit-Marker sind an die Eintrags-ID gebunden — für die Kopie unter
-        // der neuen ID mitkopieren, sonst verliert das Duplikat alle Marker.
+        // der neuen ID mitkopieren, sonst verliert die Kopie alle Marker.
         $srcMarkers = load_entry_markers($baseDir . '/tracks_meta', (string)($e['id'] ?? ''));
         if (!empty($srcMarkers)) save_entry_markers($baseDir . '/tracks_meta', $newEntryId, $srcMarkers);
     }
     $nn = count($newEntries);
     if ($nn > 0) $newEntries[$nn - 1]['anchored_to_next'] = false;
+    return $newEntries;
+}
+
+// Erstellt eine vollständige Kopie inkl. Notendateien. Eintrags-IDs werden neu vergeben.
+function duplicate_concert(string $dir, string $baseDir, string $notesDir, string $srcId): ?array {
+    $src = load_concert($dir, $srcId);
+    if (!$src) return null;
+    $newId = gen_id('k');
+    while (is_file(concert_file($dir, $newId))) $newId = gen_id('k');
+
+    $newEntries = copy_entries_deep($src['entries'], $baseDir, $notesDir);
 
     $newRehearsals = [];
     foreach ($src['rehearsals'] as $r) {
@@ -1018,13 +1056,32 @@ function migrate_legacy(string $legacy, string $dir, string $baseDir, string $no
     $validTracks = array_flip(list_tracks($tracksDir));
     $rawEntries = is_array($data['entries'] ?? null) ? $data['entries'] : [];
     $rawDurations = is_array($data['durations'] ?? null) ? $data['durations'] : [];
+    // Das Alt-Format kennt track/track_live statt der tracks-Map — clean_entries
+    // liest nur die Map und würde die Zuordnungen sonst kommentarlos verwerfen.
+    // Deshalb hier auf die festen Migrations-Slots s_orig/s_live umschreiben
+    // (dieselben IDs wie in der load_concert-Slot-Migration).
+    foreach ($rawEntries as &$re) {
+        if (!is_array($re)) continue;
+        if (!isset($re['tracks']) || !is_array($re['tracks'])) {
+            $tracks = [];
+            if (!empty($re['track']))      $tracks['s_orig'] = (string)$re['track'];
+            if (!empty($re['track_live'])) $tracks['s_live'] = (string)$re['track_live'];
+            $re['tracks'] = $tracks;
+        }
+        unset($re['track'], $re['track_live']);
+    }
+    unset($re);
     $concert = [
         'id'          => $id,
         'name'        => 'Aktuelles Konzert',
         'date'        => '',
         'description' => '',
         'rehearsals'  => [],
-        'entries'     => clean_entries($rawEntries, $validTracks, $baseDir, $notesDir),
+        'slots'       => [
+            ['id' => 's_orig', 'name' => 'Original', 'color' => 'blue'],
+            ['id' => 's_live', 'name' => 'Live',     'color' => 'green'],
+        ],
+        'entries'     => clean_entries($rawEntries, $validTracks, $baseDir, $notesDir, ['s_orig', 's_live']),
         'durations'   => clean_durations($rawDurations, $validTracks),
         'created_at'  => time(),
         'updated_at'  => time(),
@@ -1226,6 +1283,11 @@ ensure_dir($CONCERTS_DIR);
 ensure_concerts_htaccess($CONCERTS_DIR);
 ensure_dir($TRACKS_META_DIR);
 ensure_concerts_htaccess($TRACKS_META_DIR); // reines Daten-Verzeichnis, gleicher Schutz
+// config/ enthält Login-Throttle-Daten und die Update-Backups — die Schutz-
+// .htaccess entstand bisher nur einmalig beim Setup und wurde nie re-ensured
+if (defined('KP_CONFIG_DIR')) {
+    ensure_concerts_htaccess(rtrim(KP_CONFIG_DIR, '/\\'));
+}
 migrate_legacy($LEGACY_FILE, $CONCERTS_DIR, $DATA_DIR, $NOTES_DIR);
 
 $action      = $_GET['action'] ?? null;
@@ -1274,6 +1336,13 @@ if ($action === 'logout') {
     if (KP_MODE === 'platform') {
         // Plattform-Session bleibt unangetastet, nur weiterleiten
         header('Location: ' . (function_exists('kp_platform_logout_url') ? kp_platform_logout_url() : '../'));
+        exit;
+    }
+    // Nur per POST abmelden (CSRF: SameSite=Lax schickt das Cookie bei
+    // Top-Level-GET-Navigation mit — ein fremder Link könnte sonst ausloggen).
+    // Der Origin-Check oben deckt POST bereits ab.
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        header('Location: ./');
         exit;
     }
     $_SESSION = [];
@@ -1412,7 +1481,10 @@ if ($action === 'concert_delete' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$c) json_response(['ok' => false, 'error' => 'Konzert nicht gefunden'], 404);
 
     $groupId = $c['group_id'];
-    $list = read_concerts_index($CONCERTS_DIR) ?? [];
+    // list_concerts statt rohem Index: baut einen fehlenden/veralteten Index neu
+    // auf. Mit kaputtem Index wäre groupCount 0 → der Lösch-Zweig unten würde
+    // Notendateien entfernen, die andere Versionen der Gruppe noch brauchen.
+    $list = list_concerts($CONCERTS_DIR);
     $groupCount = count(array_filter($list, static fn($e) => ($e['group_id'] ?? $e['id']) === $groupId));
 
     if ($c['is_starred'] && $groupCount > 1) {
@@ -1426,10 +1498,44 @@ if ($action === 'concert_delete' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($groupCount <= 1) {
-        if (!delete_concert_files($CONCERTS_DIR, $DATA_DIR, $NOTES_DIR, $id)) {
+        if (!delete_concert_files($CONCERTS_DIR, $DATA_DIR, $NOTES_DIR, $TRACKS_META_DIR, $id)) {
             json_response(['ok' => false, 'error' => 'Löschen fehlgeschlagen'], 500);
         }
     } else {
+        // Nicht die letzte Version der Gruppe: Notendateien und Marker-Dateien
+        // nur löschen, wenn KEINE andere Version sie noch referenziert (alte
+        // Backups teilen sich Dateien und Entry-IDs mit dem Original, neuere
+        // besitzen eigene Kopien).
+        $otherNotes = [];
+        $otherEntryIds = [];
+        foreach ($list as $m) {
+            $mid = (string)($m['id'] ?? '');
+            if ($mid === $id || (($m['group_id'] ?? $m['id']) !== $groupId)) continue;
+            $mc = load_concert($CONCERTS_DIR, $mid);
+            if (!$mc) continue;
+            foreach ($mc['entries'] as $e) {
+                if (!is_array($e)) continue;
+                $eid = (string)($e['id'] ?? '');
+                if ($eid !== '') $otherEntryIds[$eid] = true;
+                foreach ((array)($e['note_files'] ?? []) as $p) {
+                    if (is_string($p) && $p !== '') $otherNotes[$p] = true;
+                }
+            }
+        }
+        foreach ($c['entries'] as $e) {
+            if (!is_array($e)) continue;
+            foreach ((array)($e['note_files'] ?? []) as $p) {
+                if (!is_string($p) || isset($otherNotes[$p])) continue;
+                if (!note_path_is_safe($p, $DATA_DIR, $NOTES_DIR)) continue;
+                $real = realpath($DATA_DIR . '/' . $p);
+                if ($real !== false && is_file($real)) @unlink($real);
+            }
+            $eid = (string)($e['id'] ?? '');
+            if ($eid !== '' && valid_entry_id($eid) && !isset($otherEntryIds[$eid])) {
+                $mf = entry_meta_path($TRACKS_META_DIR, $eid);
+                if (is_file($mf)) @unlink($mf);
+            }
+        }
         $ok = @unlink(concert_file($CONCERTS_DIR, $id));
         if ($ok) remove_from_concerts_index($CONCERTS_DIR, $id);
         if (!$ok) json_response(['ok' => false, 'error' => 'Löschen fehlgeschlagen'], 500);
@@ -1448,6 +1554,11 @@ if ($action === 'concert_backup' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $newId = gen_id('k');
     while (is_file(concert_file($CONCERTS_DIR, $newId))) $newId = gen_id('k');
 
+    // Einträge TIEF kopieren (eigene Notendatei-Kopien, eigene Entry-IDs samt
+    // Markern) — vorher teilte sich das Backup Dateien und Marker mit dem
+    // Original: Wer danach im Original eine Notendatei löschte oder Marker
+    // änderte, zerstörte rückwirkend auch das „gesicherte" Backup.
+    kp_enforce_storage_limit($TRACKS_DIR, $NOTES_DIR, kp_note_bytes_of_entries($DATA_DIR, $src['entries']));
     $backup = [
         'id'            => $newId,
         'group_id'      => $src['group_id'],
@@ -1457,7 +1568,7 @@ if ($action === 'concert_backup' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'description'   => $src['description'],
         'rehearsals'    => $src['rehearsals'],
         'slots'         => is_array($src['slots'] ?? null) ? $src['slots'] : default_slots(),
-        'entries'       => $src['entries'],
+        'entries'       => copy_entries_deep($src['entries'], $DATA_DIR, $NOTES_DIR),
         'durations'     => $src['durations'],
         'marker_labels' => $src['marker_labels'],
         'created_at'    => time(),
@@ -1466,7 +1577,7 @@ if ($action === 'concert_backup' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!save_concert($CONCERTS_DIR, $backup)) {
         json_response(['ok' => false, 'error' => 'Backup fehlgeschlagen'], 500);
     }
-    $list = read_concerts_index($CONCERTS_DIR) ?? [];
+    $list = list_concerts($CONCERTS_DIR);
     $groupMembers = array_values(array_filter($list, static fn($e) => ($e['group_id'] ?? $e['id']) === $src['group_id']));
     json_response(['ok' => true, 'backup' => concert_summary($backup), 'group' => $groupMembers]);
 }
@@ -1480,33 +1591,56 @@ if ($action === 'concert_set_star' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($target['is_starred']) json_response(['ok' => true]);
 
     $groupId = $target['group_id'];
-    $list = read_concerts_index($CONCERTS_DIR) ?? [];
-    $members = array_filter($list, static fn($e) => ($e['group_id'] ?? $e['id']) === $groupId);
-    // Eine aktive Freigabe wandert zur neu aktivierten Version mit —
-    // der geteilte Link zeigt immer auf den aktiven Stand
+    $list = list_concerts($CONCERTS_DIR);
+    $members = array_values(array_filter($list, static fn($e) => ($e['group_id'] ?? $e['id']) === $groupId));
+
+    // ERST alle Gruppenmitglieder sperren, DANN laden/ändern/speichern — dieser
+    // Endpunkt war der einzige Load-Modify-Save-Pfad ohne kp_concert_lock: Ein
+    // parallel laufendes Speichern (save/durations_save) konnte sonst mit
+    // seinem älteren Lade-Stand still überschrieben werden.
+    $kpLocks = [];
+    foreach ($members as $m) {
+        $kpLocks[] = kp_concert_lock($CONCERTS_DIR, (string)($m['id'] ?? ''));
+    }
+
+    $loaded = [];
     $wanderndeFreigabe = null;
+    $freigabeQuelle = '';
     foreach ($members as $m) {
         $mid = (string)($m['id'] ?? '');
         $mc = load_concert($CONCERTS_DIR, $mid);
         if (!$mc) continue;
         if ($mid !== $id && is_array($mc['share'] ?? null) && !empty($mc['share']['enabled'])) {
+            // Eine aktive Freigabe wandert zur neu aktivierten Version mit —
+            // der geteilte Link zeigt immer auf den aktiven Stand
             $wanderndeFreigabe = $mc['share'];
-            unset($mc['share']);
+            $freigabeQuelle = $mid;
         }
-        $mc['is_starred'] = ($mid === $id);
+        $loaded[$mid] = $mc;
+    }
+    if (!isset($loaded[$id])) {
+        json_response(['ok' => false, 'error' => 'Version nicht gefunden'], 404);
+    }
+
+    // Ziel ZUERST speichern (Stern + ggf. gewanderte Freigabe): schlägt danach
+    // etwas fehl, existiert die Freigabe schlimmstenfalls kurz doppelt — aber
+    // sie geht nie verloren (vorher wurde sie erst entfernt, dann übertragen).
+    $neu = $loaded[$id];
+    $neu['is_starred'] = true;
+    if ($wanderndeFreigabe !== null) $neu['share'] = $wanderndeFreigabe;
+    if (!save_concert($CONCERTS_DIR, $neu)) {
+        json_response(['ok' => false, 'error' => 'Speichern fehlgeschlagen'], 500);
+    }
+    foreach ($loaded as $mid => $mc) {
+        if ($mid === $id) continue;
+        $mc['is_starred'] = false;
+        if ($mid === $freigabeQuelle) unset($mc['share']);
         save_concert($CONCERTS_DIR, $mc);
     }
-    if ($wanderndeFreigabe !== null) {
-        $neu = load_concert($CONCERTS_DIR, $id);
-        if ($neu) {
-            $neu['share'] = $wanderndeFreigabe;
-            save_concert($CONCERTS_DIR, $neu);
-            if (function_exists('kp_platform_share_changed')) {
-                kp_platform_share_changed($id, (string)$wanderndeFreigabe['token']);
-            }
-        }
+    if ($wanderndeFreigabe !== null && function_exists('kp_platform_share_changed')) {
+        kp_platform_share_changed($id, (string)$wanderndeFreigabe['token']);
     }
-    $list = read_concerts_index($CONCERTS_DIR) ?? [];
+    $list = list_concerts($CONCERTS_DIR);
     $groupMembers = array_values(array_filter($list, static fn($e) => ($e['group_id'] ?? $e['id']) === $groupId));
     json_response(['ok' => true, 'group' => $groupMembers]);
 }
@@ -1578,6 +1712,11 @@ if ($action === 'concert_update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!save_concert($CONCERTS_DIR, $c)) {
         json_response(['ok' => false, 'error' => 'Speichern fehlgeschlagen'], 500);
     }
+    // Freigabe-Geheimnisse (Token, Passwort-Hash) nie ausliefern — gleiche
+    // Behandlung wie bei state/concert_save_meta
+    $shareInfo = share_info_for_owner($c);
+    unset($c['share']);
+    if ($isLoggedIn) $c['share_info'] = $shareInfo;
     json_response(['ok' => true, 'concert' => $c]);
 }
 
@@ -1588,6 +1727,18 @@ if ($action === 'concert_save_meta' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$c) json_response(['ok' => false, 'error' => 'Konzert nicht gefunden'], 404);
     $body = json_decode(file_get_contents('php://input'), true);
     if (!is_array($body)) json_response(['ok' => false, 'error' => 'Ungültiges Format'], 400);
+    // Optimistisches Sperren wie bei 'save': Meta-Änderungen zweier Tabs
+    // überschrieben sich vorher still, weil nur die Entries-Speicherung den
+    // Stempel prüfte.
+    $base = isset($body['base_updated_at']) ? (int)$body['base_updated_at'] : 0;
+    if ($base > 0 && (int)($c['updated_at'] ?? 0) > $base) {
+        json_response([
+            'ok' => false,
+            'conflict' => true,
+            'updated_at' => (int)($c['updated_at'] ?? 0),
+            'error' => 'Das Konzert wurde inzwischen an anderer Stelle geändert. Bitte neu laden.',
+        ], 409);
+    }
     if (isset($body['name'])) {
         $n = trim((string)$body['name']);
         if ($n === '') json_response(['ok' => false, 'error' => 'Name darf nicht leer sein'], 400);
@@ -2176,7 +2327,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     </button>
     <?php if (function_exists('kp_platform_nav_html')) echo kp_platform_nav_html(); ?>
     <?php if (KP_MODE === 'standalone'): ?>
-    <a href="?action=logout" class="logout-btn" title="Abmelden">Abmelden</a>
+    <form method="post" action="?action=logout" class="logout-form"><button type="submit" class="logout-btn" title="Abmelden">Abmelden</button></form>
     <?php endif; ?>
   </header>
 
@@ -2190,15 +2341,17 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     <button type="button" class="ghost" id="update-check-btn">Auf Updates prüfen</button>
     <span id="update-result" role="status" aria-live="polite"></span>
     <button type="button" class="primary" id="update-run-btn" hidden>Update installieren</button>
+    <button type="button" class="ghost" id="update-rollback-btn" hidden>Letztes Update rückgängig machen</button>
     <?php endif; ?>
   </footer>
   <?php if (KP_MODE === 'standalone'): ?>
   <script>
   (function () {
     'use strict';
-    var checkBtn = document.getElementById('update-check-btn');
-    var runBtn   = document.getElementById('update-run-btn');
-    var result   = document.getElementById('update-result');
+    var checkBtn    = document.getElementById('update-check-btn');
+    var runBtn      = document.getElementById('update-run-btn');
+    var rollbackBtn = document.getElementById('update-rollback-btn');
+    var result      = document.getElementById('update-result');
     if (!checkBtn) return;
     checkBtn.addEventListener('click', function () {
       result.textContent = 'Prüfe…';
@@ -2212,8 +2365,31 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
           } else {
             result.textContent = 'Auf dem neuesten Stand (v' + d.current_version + ')';
           }
+          // Rollback anbieten, wenn ein Update-Backup existiert — vorher gab es
+          // den Endpunkt nur ohne Knopf, die Fehlermeldungen verwiesen ins Leere.
+          rollbackBtn.hidden = !d.has_backup;
         })
         .catch(function () { result.textContent = 'Update-Server nicht erreichbar'; });
+    });
+    rollbackBtn.addEventListener('click', async function () {
+      if (!await kpConfirm('Das letzte Update rückgängig machen?\n\nDie zuvor installierte Version wird aus dem automatischen Backup wiederhergestellt. Konzerte, Tracks und Einstellungen bleiben erhalten.')) return;
+      rollbackBtn.disabled = true;
+      result.textContent = 'Stelle vorherige Version wieder her…';
+      fetch('?action=update_rollback', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.ok) {
+            result.textContent = 'Vorherige Version wiederhergestellt. Seite wird neu geladen…';
+            setTimeout(function () { location.reload(); }, 1500);
+          } else {
+            result.textContent = 'Fehler: ' + (d.error || 'Rollback fehlgeschlagen');
+            rollbackBtn.disabled = false;
+          }
+        })
+        .catch(function () {
+          result.textContent = 'Rollback fehlgeschlagen';
+          rollbackBtn.disabled = false;
+        });
     });
     runBtn.addEventListener('click', async function () {
       if (!await kpConfirm('Update jetzt installieren?\n\nEin Backup der aktuellen Version wird automatisch angelegt. Konzerte, Tracks und Einstellungen bleiben erhalten.')) return;
@@ -2642,7 +2818,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         </button>
         <?php if (!$SHARE_MODE && function_exists('kp_platform_nav_html')) echo kp_platform_nav_html(); ?>
         <?php if (!$SHARE_MODE && KP_MODE === 'standalone'): ?>
-        <a href="?action=logout" class="logout-btn" title="Abmelden">Abmelden</a>
+        <form method="post" action="?action=logout" class="logout-form"><button type="submit" class="logout-btn" title="Abmelden">Abmelden</button></form>
         <?php endif; ?>
       </div>
     </div>
@@ -3323,35 +3499,26 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
             rehearsals: state.meta.rehearsals,
             marker_labels: state.meta.markerLabels,
             slots: state.meta.slots,
+            base_updated_at: state.meta.updatedAt || 0,
           })
         })
         .then(r => r.json())
         .then(d => {
+          if (d && d.conflict) { handleSaveConflict(); return; }
           if (!d.ok) { flashStatus('Fehler: ' + (d.error || 'Speichern'), 0); return; }
-          if (d.concert) {
-            state.meta = {
-              id:          d.concert.id,
-              name:        d.concert.name,
-              date:        d.concert.date,
-              description: d.concert.description,
-              rehearsals:  d.concert.rehearsals || [],
-              markerLabels: d.concert.marker_labels || {},
-              slots: Array.isArray(d.concert.slots) ? d.concert.slots : (state.meta.slots || []),
-              updatedAt: d.concert.updated_at || 0,
-            };
-            render();
-            rebuildAutoplayOptions();
-            renderSlotsEditor();
-            // Server-bereinigte Werte zurückspielen, falls sie sich geändert haben
-            if (els.metaName.value !== state.meta.name) els.metaName.value = state.meta.name;
-            if (els.metaDate.value !== state.meta.date) els.metaDate.value = state.meta.date;
-            if (els.metaDesc.value !== state.meta.description) els.metaDesc.value = state.meta.description;
-            updateDateDisplay();
-          }
+          // Die Antwort NICHT komplett in state.meta zurückspielen: Die offenen
+          // Eingabefelder (Probetermin-Zeilen, Slot-Editor, Name/Beschreibung)
+          // halten Closures auf die AKTUELLEN state-Objekte — ein Austausch des
+          // Arrays machte sie zu Waisen: Weitertippen landete in verworfenen
+          // Objekten und ging still verloren, der Slot-Editor riss beim Tippen
+          // den Fokus ab. Der Server normalisiert nur (Länge/Format), relevant
+          // ist für uns allein der neue Konflikt-Stempel.
+          if (d.concert && d.concert.updated_at) state.meta.updatedAt = d.concert.updated_at;
           const displayName = state.meta.name || 'Konzert';
           document.title = displayName + ' — Konzertplaner';
           els.nameDisplay.textContent = displayName;
           els.descDisplay.textContent = state.meta.description || '';
+          updateDateDisplay();
           flashStatus('Gespeichert', 1200);
         })
         .catch(() => flashStatus('Fehler', 0));
@@ -3616,13 +3783,16 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         if (idx < state.entries.length - 1) {
           const next = state.entries[idx + 1];
           if (entry.type !== 'heading' && next.type !== 'heading') {
-            els.entries.appendChild(renderAnchorGap(entry, idx));
+            // trackCounter statt idx: die sichtbare Nummerierung zählt nur
+            // Tracks — mit idx nannte das Label nach einer Überschrift
+            // falsche Eintragsnummern.
+            els.entries.appendChild(renderAnchorGap(entry, trackCounter));
           }
         }
       });
     }
 
-    function renderAnchorGap(entry, idx) {
+    function renderAnchorGap(entry, trackNr) {
       const anchored = !!entry.anchored_to_next;
       const editMode = isEditMode();
       const gap = document.createElement('div');
@@ -3635,8 +3805,8 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       btn.className = 'anchor-toggle';
       btn.setAttribute('aria-pressed', anchored ? 'true' : 'false');
       const label = anchored
-        ? 'Verbindung zwischen Eintrag ' + (idx + 1) + ' und ' + (idx + 2) + ' lösen'
-        : 'Eintrag ' + (idx + 1) + ' mit Eintrag ' + (idx + 2) + ' verbinden';
+        ? 'Verbindung zwischen Eintrag ' + trackNr + ' und ' + (trackNr + 1) + ' lösen'
+        : 'Eintrag ' + trackNr + ' mit Eintrag ' + (trackNr + 1) + ' verbinden';
       btn.setAttribute('aria-label', label);
       btn.title = label;
       btn.tabIndex = editMode ? 0 : -1;
@@ -4201,6 +4371,33 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     // ---------- Notiz-Editor (Popup, wie ein Notizzettel) ----------
     let noteModalEntry = null;
     let noteModalOpener = null;
+    // Fokus nach einem Re-Render zurückgeben: der ursprüngliche Auslöse-Button
+    // ist dann zerstört, deshalb das inhaltsgleiche Pendant im neuen DOM suchen
+    // (gleiches Muster wie beim Anker-Toggle). Vorher fiel der Fokus nach dem
+    // Speichern aus Notiz-/BPM-/Noten-Popup auf <body>.
+    function refocusEntryControl(entryId, sel) {
+      const row = els.entries.querySelector('[data-id="' + entryId + '"]');
+      if (!row) return;
+      let el = row.querySelector(sel);
+      // Das Ziel kann im Lesemodus per CSS ausgeblendet sein (z. B. .note-add-btn
+      // über body:not(.edit-mode) .upload-btn{display:none}) — focus() darauf
+      // wäre ein No-Op und der Fokus fiele doch auf <body>. Dann stattdessen
+      // die Eintrags-Zeile selbst fokussieren, damit die Position erhalten bleibt.
+      if (!el || el.offsetParent === null) {
+        // Bevorzugt das Titel-Feld: immer sichtbar (im Lesemodus nur readonly)
+        // und mit aria-label benannt — ein Screenreader hört so, WO er steht,
+        // statt eines stummen Listenelements.
+        const titleEl = row.querySelector('.entry-title');
+        if (titleEl && titleEl.offsetParent !== null) {
+          el = titleEl;
+        } else {
+          row.tabIndex = -1;
+          el = row;
+        }
+      }
+      el.focus();
+    }
+
     function openNoteModal(entry) {
       noteModalEntry = entry;
       noteModalOpener = document.activeElement;
@@ -4222,10 +4419,13 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     }
     function saveNoteModal() {
       if (!noteModalEntry || !CAN_EDIT_PROGRAM) { closeNoteModal(); return; }
+      const eid = noteModalEntry.id;
       noteModalEntry.notes = els.noteModalText.value;
+      const hatNotiz = (noteModalEntry.notes || '').trim() !== '';
       save();
       closeNoteModal();
       render();
+      refocusEntryControl(eid, hatNotiz ? '.note-text-chip a' : '.note-add-btn');
     }
     if (els.noteModal) {
       trapFocus(els.noteModal);
@@ -4270,10 +4470,12 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       let v = parseInt(els.bpmModalInput.value, 10);
       if (!Number.isFinite(v) || v < 1) v = 0;
       else if (v > 400) v = 400;
+      const eid = bpmModalEntry.id;
       bpmModalEntry.bpm = v;
       save();
       closeBpmModal();
       render();
+      refocusEntryControl(eid, '.note-bpm-btn');
     }
     if (els.bpmModal) {
       trapFocus(els.bpmModal);
@@ -4346,10 +4548,12 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       if (!sheetEntry || !CAN_EDIT_PROGRAM) { closeSheetModal(); return; }
       let v = els.sheetAbc.value.trim();
       if (v === SHEET_TEMPLATE.trim()) v = ''; // unverändertes Beispiel = keine Noten
+      const eid = sheetEntry.id;
       sheetEntry.abc = v;
       save();
       closeSheetModal();
       render();
+      refocusEntryControl(eid, v !== '' ? '.note-sheet-chip a' : '.note-sheet-btn');
     }
     function insertSheet(text) {
       const ta = els.sheetAbc;
@@ -4622,7 +4826,15 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       // dupliziert aus SEINEM Stand und liefert die komplette Liste zurück —
       // eine noch nicht gesendete Änderung (z. B. gerade getippter Titel)
       // würde sonst überschrieben.
-      if ((saveTimer || saveInFlight) && versuch < 10) {
+      if (saveTimer || saveInFlight) {
+        if (versuch >= 10) {
+          // Nach ~2,5 s Warten ABBRECHEN statt trotzdem zu duplizieren: sonst
+          // liefe die späte Speicherung mit altem Stempel in einen falschen
+          // Konfliktdialog („von einem Bandkollegen geändert").
+          flashStatus('', 0);
+          kpAlert('Duplizieren gerade nicht möglich — eine Speicherung läuft noch. Bitte gleich erneut versuchen.');
+          return;
+        }
         if (saveTimer) save(true);
         setTimeout(() => duplicateEntry(entryId, versuch + 1), 250);
         return;
@@ -5191,7 +5403,10 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         wavesurfer = null;
         els.waveform.innerHTML = '';
       }
-      if (markerSaveTimer) { clearTimeout(markerSaveTimer); markerSaveTimer = null; }
+      // Ausstehende Marker-Speicherung FLUSHEN statt verwerfen — currentEntryId
+      // zeigt hier noch auf den alten Eintrag. Vorher ging eine eben gezogene
+      // Marker-Verschiebung beim schnellen Trackwechsel verloren.
+      if (markerSaveTimer) saveMarkers(true);
       if (!els.markerModal.hidden) closeMarkerPopup(true);
       if (state.markerEditMode) setMarkerEditMode(false);
       els.markerOverlay.innerHTML = '';
@@ -5302,7 +5517,8 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       // Offenes Marker-Popup VOR currentTrack=null verwerfen, damit getMarkersForCurrent
       // den richtigen Track noch findet (sonst bleibt der leere Marker im State liegen).
       if (!els.markerModal.hidden) closeMarkerPopup(true);
-      if (markerSaveTimer) { clearTimeout(markerSaveTimer); markerSaveTimer = null; }
+      // Ausstehende Marker-Speicherung flushen, solange currentEntryId noch gesetzt ist
+      if (markerSaveTimer) saveMarkers(true);
       if (wavesurfer) { try { wavesurfer.destroy(); } catch (e) {} wavesurfer = null; }
       els.waveform.innerHTML = '';
       els.player.classList.remove('active');
@@ -5527,6 +5743,13 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         if (idx !== -1 && !list[idx].text) {
           list.splice(idx, 1);
           renderMarkers();
+        } else if (idx !== -1) {
+          // Bestands-Marker: verworfene Farb-VORSCHAU zurücksetzen — der
+          // Farbklick färbt den Marker sofort im DOM, gespeichert wird erst
+          // beim Submit. Ohne Reset zeigte das DOM bis zum nächsten Render
+          // eine Farbe, die der State nie übernommen hat.
+          const mEl = els.markerOverlay.querySelector('.wave-marker[data-id="' + list[idx].id + '"]');
+          if (mEl) mEl.dataset.color = MARKER_COLORS.includes(list[idx].color) ? list[idx].color : 'yellow';
         }
       }
       state.currentMarkerEditing = null;
@@ -5589,7 +5812,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     let markerSaveTimer = null;
     function saveMarkersDebounced() {
       clearTimeout(markerSaveTimer);
-      markerSaveTimer = setTimeout(() => saveMarkers(true), 400);
+      markerSaveTimer = setTimeout(() => { markerSaveTimer = null; saveMarkers(true); }, 400);
     }
     function saveMarkers(immediate) {
       const eid = state.currentEntryId;
@@ -5607,8 +5830,11 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
           flashStatus(d.ok ? 'Marker gespeichert' : 'Marker-Fehler', d.ok ? 1200 : 0);
         }).catch(() => flashStatus('Marker-Fehler', 0));
       };
-      if (immediate) { clearTimeout(markerSaveTimer); doSave(); }
-      else { clearTimeout(markerSaveTimer); markerSaveTimer = setTimeout(doSave, 400); }
+      // markerSaveTimer konsequent nullen: er dient als „Speicherung steht aus"-
+      // Indikator (Flush bei Trackwechsel/Player-Schließen, Unload-Beacon).
+      clearTimeout(markerSaveTimer);
+      if (immediate) { markerSaveTimer = null; doSave(); }
+      else { markerSaveTimer = setTimeout(() => { markerSaveTimer = null; doSave(); }, 400); }
     }
 
     // ---------- Marker-Edit-Toggle Button ----------
@@ -5905,7 +6131,9 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       els.uploadStatus.textContent = 'Lade hoch…';
       const fd = new FormData();
       uploadFiles.forEach(f => fd.append('files[]', f));
-      fetch('?action=upload_track', { method: 'POST', body: fd })
+      // API_K auch hier: ohne k+share-Token lehnte der Server den MP3-Upload
+      // in der Edit-Freigabe immer mit 401 ab, obwohl er dort erlaubt ist.
+      fetch('?action=upload_track' + API_K, { method: 'POST', body: fd })
         .then(r => r.json())
         .then(d => {
           if (!d.ok) {
@@ -6119,7 +6347,7 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     function close() {
       overlay.hidden = true;
       document.body.style.overflow = '';
-      if (keyHandler) { document.removeEventListener('keydown', keyHandler); keyHandler = null; }
+      if (keyHandler) { document.removeEventListener('keydown', keyHandler, true); keyHandler = null; }
       overlay.onclick = null;
       if (lastFocus && typeof lastFocus.focus === 'function') { try { lastFocus.focus(); } catch (e) {} }
     }
@@ -6156,7 +6384,10 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         // Enter braucht keinen eigenen Handler — der fokussierte Button wird nativ ausgelöst,
         // sodass Enter auf „Abbrechen" auch wirklich abbricht.
         keyHandler = function (ev) {
-          if (ev.key === 'Escape') { ev.preventDefault(); finish(opts.confirm ? false : undefined); return; }
+          // stopPropagation: Der Dialog liegt oft ÜBER einem anderen Modal
+          // (Einstellungen → Rückfrage). Ohne Stopp schlossen dessen
+          // document-Escape-Handler das Modal gleich mit.
+          if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(opts.confirm ? false : undefined); return; }
           if (ev.key === 'Tab') {
             var list = Array.prototype.slice.call(overlay.querySelectorAll('button'))
               .filter(function (el) { return !el.disabled && el.offsetParent !== null; });
@@ -6166,7 +6397,8 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
             else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
           }
         };
-        document.addEventListener('keydown', keyHandler);
+        // Capture-Phase: läuft VOR den bubbelnden document-Handlern der Modals
+        document.addEventListener('keydown', keyHandler, true);
         // Klick auf den abgedunkelten Hintergrund = Abbrechen.
         overlay.onclick = function (ev) { if (ev.target === overlay) finish(opts.confirm ? false : undefined); };
 

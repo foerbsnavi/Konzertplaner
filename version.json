@@ -1,7 +1,20 @@
 {
-    "version": "1.13.1",
-    "date": "2026-07-10",
+    "version": "1.14.0",
+    "date": "2026-07-16",
     "changelog": [
+        {
+            "version": "1.14.0",
+            "date": "2026-07-16",
+            "changes": [
+                "Robusteres Update-System: Der Programmkern wird beim Selbst-Update jetzt in einem Zug getauscht — vorher konnte ein mittendrin abbrechendes Update (z. B. bei vollem Speicher) die Installation lahmlegen, und ausgerechnet dann war auch der Rollback nicht mehr aufrufbar. Bei Fehlern wird die vorherige Version automatisch sofort wiederhergestellt, doppelt gestartete Updates werden verhindert, und in der Fußzeile gibt es jetzt den Knopf „Letztes Update rückgängig machen\", solange ein Update-Backup vorliegt.",
+                "Fehler behoben: In einer Freigabe mit Bearbeitungs-Recht schlug das Hochladen von Tracks immer mit „Nicht angemeldet\" fehl — Bandkollegen mit Edit-Link können jetzt wie vorgesehen MP3s hochladen.",
+                "Fehler behoben: Eingaben in den Konzert-Angaben (z. B. eine Probetermin-Notiz direkt nach dem Setzen des Datums) konnten still verloren gehen. Außerdem erkennen jetzt auch die Konzert-Angaben Bearbeitungs-Konflikte zwischen zwei Tabs, statt sich gegenseitig zu überschreiben.",
+                "Backup-Versionen sind jetzt echte Sicherungen: Sie erhalten eigene Kopien der Notendateien und Zeit-Marker. Vorher teilte sich das Backup beides mit dem Original — wer dort eine Datei löschte oder Marker änderte, veränderte rückwirkend auch das „gesicherte\" Backup.",
+                "Mehr Schutz vor Datenverlust: Der Stern-Wechsel zwischen Versionen kann eine gleichzeitig laufende Speicherung nicht mehr überschreiben; beim Löschen einer Version bleiben Dateien erhalten, die andere Versionen derselben Gruppe noch brauchen (nicht mehr gebrauchte Marker-Dateien werden dabei mit aufgeräumt); die Übernahme ganz alter Konzertplan-Dateien aus Version 1 behält die Track-Zuordnungen; Zeit-Marker-Änderungen gehen beim schnellen Trackwechsel nicht mehr verloren.",
+                "Sicherheits-Härtung: Der Schutz gegen Passwort-Raten ließ sich über den Browser-Namen umgehen und greift jetzt zuverlässig; Abmelden geht nur noch über den Knopf (nicht mehr über präparierte Links); der Konfigurations-Ordner wird bei Bedarf automatisch neu geschützt.",
+                "Bedienung & Barrierefreiheit: Escape in einer Rückfrage schließt nicht mehr zugleich das darunterliegende Einstellungs-Fenster; nach dem Speichern aus Notiz-/BPM-/Noten-Popups springt der Tastatur-Fokus zum richtigen Knopf zurück; per Programm versteckte Knöpfe (z. B. „Update installieren\") erscheinen nicht mehr fälschlich; dazu kleinere Kontrast- und Mobil-Layout-Korrekturen."
+            ]
+        },
         {
             "version": "1.13.1",
             "date": "2026-07-10",

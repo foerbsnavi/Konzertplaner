@@ -29,6 +29,7 @@
   ExpiresByType image/x-icon "access plus 7 days"
   ExpiresByType text/css "access plus 30 days"
   ExpiresByType application/javascript "access plus 30 days"
+  ExpiresByType text/javascript "access plus 30 days"
   # Tracks nur 1 Tag: die URLs bleiben beim Ersetzen einer Datei gleich (kein
   # Cache-Buster) — danach revalidiert der Browser per Last-Modified (304, billig)
   ExpiresByType audio/mpeg "access plus 1 day"

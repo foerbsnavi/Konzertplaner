@@ -76,6 +76,11 @@ header h1 {
 }
 .spacer { flex: 1; }
 
+/* [hidden] gewinnt IMMER — Regeln wie button{display:inline-flex} oder
+   .share-url-row{display:flex} übersteuerten das Attribut sonst und zeigten
+   per JS versteckte Elemente an (Update-Button, Marker-Löschen, Share-URL). */
+[hidden] { display: none !important; }
+
 button {
   font: inherit;
   cursor: pointer;
@@ -167,9 +172,7 @@ main { padding: 16px 16px 180px; max-width: 900px; margin: 0 auto; }
   align-items: center;
 }
 .entry.heading:first-child { margin-top: 0; }
-.entry.heading.is-playing,
-.entry.heading.drop-above,
-.entry.heading.drop-below { box-shadow: none; }   /* Karten-Effekte deaktivieren */
+.entry.heading.is-playing { box-shadow: none; }   /* Karten-Effekte deaktivieren */
 .entry.heading.drop-above { box-shadow: 0 -3px 0 0 var(--drop-strong); }
 .entry.heading.drop-below { box-shadow: 0 3px 0 0 var(--drop-strong); }
 .entry.heading > .handle { padding-top: 0; }
@@ -209,7 +212,6 @@ body:not(.edit-mode) .entry.heading:has(.heading-title:placeholder-shown) {
 
 .entry.drop-above { box-shadow: 0 -3px 0 0 var(--drop-strong); }
 .entry.drop-below { box-shadow: 0 3px 0 0 var(--drop-strong); }
-.entry.track-drop { background: var(--accent-soft); border-color: var(--drop-strong); }
 
 /* ---------- Anker zwischen zwei Einträgen ---------- */
 /* Im Edit-Modus: Toggle-Button auf der Berührungslinie zwischen den Karten.
@@ -999,8 +1001,7 @@ select:focus-visible {
 .legend-item[data-color="blue"] .legend-dot   { background: #0ea5e9; }
 .legend-item[data-color="purple"] .legend-dot { background: #8b5cf6; }
 
-/* Section-Labels (Probetermine, Pool …) — gescoped statt globalem h2 */
-#rehearsals-heading,
+/* Section-Label (Pool) — gescoped statt globalem h2 */
 #pool-heading {
   font-size: 13px;
   font-weight: 600;
@@ -1279,10 +1280,8 @@ body:not(.edit-mode) .track-slot.empty { display: none; }
   .entry { grid-template-columns: 20px 1fr auto; padding: 8px; }
   header { gap: 8px; }
   header h1 { font-size: 16px; }
-  /* Detail-Header auf schmalen Screens kompakter, Modus-Badge entfällt
-     (Status wird ohnehin über aria-pressed und die Toggle-Farbe kommuniziert) */
+  /* Detail-Header auf schmalen Screens kompakter */
   .detail-header { padding: 8px 12px; }
-  body.edit-mode .edit-badge { display: none; }
   .header-main { gap: 8px; }
   .header-title-block { gap: 8px; }
   .concert-h1 { font-size: 16px; }
@@ -1306,6 +1305,7 @@ body:not(.edit-mode) .track-slot.empty { display: none; }
   .entry-status,
   .entry-status-label {
     width: 100%;
+    max-width: none; /* Basis-Deckel (160px) aufheben — volle Zeile ist hier gewollt */
     order: 10;
     margin-top: 2px;
   }
@@ -1353,9 +1353,6 @@ body:not(.edit-mode) .track-slot.empty { display: none; }
   flex-direction: column;
   gap: 10px;
   transition: border-color 0.15s, box-shadow 0.15s;
-}
-.concert-card:hover {
-  border-color: var(--border);
 }
 
 .concert-link {
@@ -1448,7 +1445,7 @@ body:not(.edit-mode) .track-slot.empty { display: none; }
   flex: 1;
   min-width: 0;
 }
-.version-date:hover { color: var(--accent); }
+.version-date:hover { color: var(--accent-ink); } /* --accent fiele auf dem Hover-Grund unter AA-Kontrast */
 .version-date:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .version-star {
   background: transparent;
@@ -1608,19 +1605,6 @@ body:not(.edit-mode) .track-slot.empty { display: none; }
    Detailseite: Header + Metadaten-Bar + Probetermine
    ============================================================ */
 
-/* Visually-hidden Utility (für Screenreader sichtbar, optisch nicht) */
-.visually-hidden {
-  position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
-  padding: 0 !important;
-  margin: -1px !important;
-  overflow: hidden !important;
-  clip: rect(0,0,0,0) !important;
-  white-space: nowrap !important;
-  border: 0 !important;
-}
-
 /* ============================================================
    Detailseite: Header
    Aufbau:
@@ -1755,16 +1739,6 @@ body:not(.edit-mode) .edit-only-btn { display: none; }
 .concert-date-display[data-empty="1"] { display: none; }
 
 /* Probetermine */
-.rehearsals-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 0 8px;
-}
-.rehearsals-head h2 {
-  margin: 0;
-}
 #rehearsals {
   display: flex;
   flex-direction: column;
@@ -2079,7 +2053,8 @@ body:not(.edit-mode) .rehearsal-row {
   padding: 2px 6px;
 }
 
-/* Logout */
+/* Logout (Button in einem Mini-Formular — Abmelden läuft per POST) */
+.logout-form { display: contents; }
 .logout-btn {
   font-size: 12px;
   border: 1px solid var(--border);
@@ -2087,6 +2062,9 @@ body:not(.edit-mode) .rehearsal-row {
   padding: 4px 10px;
   text-decoration: none;
   color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
 }
 .logout-btn:hover {
   color: var(--text);

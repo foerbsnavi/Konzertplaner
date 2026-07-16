@@ -15,9 +15,34 @@ if (!defined('KP_BASE_DIR')) {
 const KP_UPDATE_ALLOWED_HOSTS = ['konzertplaner.brosemedien.de'];
 const KP_UPDATE_VERSION_PATH  = '/files/konzertplaner_version.json';
 
-// System-Dateien/-Ordner, die ein Update ersetzt (relativ zur Installations-Wurzel)
+// System-Dateien/-Ordner, die ein Update ersetzt (relativ zur Installations-Wurzel).
+// Die Konstanten sind nur noch der FALLBACK für Pakete, deren Inhalt nicht lesbar
+// ist — normalerweise leitet kp_update_package_manifest() die Liste dynamisch aus
+// dem Paket ab. Grund: Der Updater der INSTALLIERTEN Version führt das Update aus;
+// eine fixe Liste würde neue Wurzel-Dateien (z. B. LICENSE) nie ankommen lassen.
 const KP_UPDATE_SYSTEM_DIRS  = ['core'];
-const KP_UPDATE_SYSTEM_FILES = ['index.php', 'version.json', '.htaccess', 'README.txt', 'LIZENZEN.txt'];
+const KP_UPDATE_SYSTEM_FILES = ['index.php', 'version.json', '.htaccess', 'README.txt', 'LIZENZEN.txt', 'LICENSE'];
+// Diese Einträge fasst ein Update NIEMALS an (Nutzerdaten + Konfiguration)
+const KP_UPDATE_PROTECTED    = ['config', 'daten'];
+
+// Leitet aus dem entpackten Paket ab, welche Ordner/Dateien zu übernehmen sind.
+// Alles auf oberster Ebene außer den geschützten Einträgen — so kommen auch
+// künftig neue Wurzel-Dateien/Ordner bei Bestandsinstallationen an.
+function kp_update_package_manifest(string $tmpDir): array {
+    $dirs  = [];
+    $files = [];
+    foreach (scandir($tmpDir) ?: [] as $item) {
+        if ($item === '.' || $item === '..') continue;
+        if (in_array($item, KP_UPDATE_PROTECTED, true)) continue;
+        if (is_dir($tmpDir . '/' . $item)) $dirs[] = $item;
+        else $files[] = $item;
+    }
+    if (!in_array('core', $dirs, true)) {
+        // Unplausibles Paket → konservativer Fallback auf die bekannten Listen
+        return [KP_UPDATE_SYSTEM_DIRS, KP_UPDATE_SYSTEM_FILES];
+    }
+    return [$dirs, $files];
+}
 
 function kp_update_read_version_file(): array {
     $raw = @file_get_contents(KP_VERSION_FILE);
@@ -84,9 +109,26 @@ function kp_update_http_download(string $url, string $dest, int $timeout = 120):
         }
         return true;
     }
-    $body = kp_update_http_get($url, $timeout);
-    if ($body === null) return false;
-    return @file_put_contents($dest, $body, LOCK_EX) !== false;
+    // Fallback ohne curl: ebenfalls streamen statt das ZIP komplett in den RAM zu laden
+    $ctx = stream_context_create([
+        'http' => ['timeout' => $timeout],
+        'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true, 'allow_self_signed' => false],
+    ]);
+    $in = @fopen($url, 'rb', false, $ctx);
+    if ($in === false) return false;
+    $out = @fopen($dest, 'wb');
+    if ($out === false) {
+        fclose($in);
+        return false;
+    }
+    $copied = stream_copy_to_stream($in, $out);
+    fclose($in);
+    fclose($out);
+    if ($copied === false || $copied === 0) {
+        @unlink($dest);
+        return false;
+    }
+    return true;
 }
 
 // Holt die Versions-Info vom Update-Server: ['version','date','changelog','download_url']
@@ -114,6 +156,8 @@ function kp_update_check(): array {
         'remote_version'   => $new,
         'update_available' => version_compare($new, $cur, '>'),
         'changelog'        => $remote['changelog'] ?? [],
+        // Fürs UI: Rollback nur anbieten, wenn ein Backup existiert
+        'has_backup'       => count(kp_update_list_backups()) > 0,
     ];
 }
 
@@ -187,8 +231,38 @@ function kp_update_list_backups(): array {
     return $dirs;
 }
 
+// Stellt Ordner + Wurzel-Dateien aus einem Backup wieder her (für den
+// automatischen Sofort-Restore im Fehlerpfad des Updates).
+function kp_update_restore_from(string $backup, array $dirs, array $files): bool {
+    $ok = true;
+    foreach ($dirs as $d) {
+        if (!is_dir($backup . '/' . $d)) continue;
+        kp_update_rrmdir(KP_BASE_DIR . '/' . $d);
+        $ok = kp_update_copy_dir($backup . '/' . $d, KP_BASE_DIR . '/' . $d) && $ok;
+    }
+    foreach ($files as $f) {
+        if (is_file($backup . '/' . $f)) {
+            $ok = @copy($backup . '/' . $f, KP_BASE_DIR . '/' . $f) && $ok;
+        }
+    }
+    return $ok;
+}
+
 // Führt das Update aus. Liefert ['ok'=>bool, 'error'=>?, 'version'=>?]
 function kp_update_run(): array {
+    // Sperre gegen parallele Update-Läufe (Doppelklick, zweiter Tab). Das Handle
+    // bleibt offen; PHP gibt die Sperre am Request-Ende automatisch frei.
+    $kpUpdateLock = @fopen(KP_CONFIG_DIR . '/.update.lock', 'c');
+    if ($kpUpdateLock !== false && !@flock($kpUpdateLock, LOCK_EX | LOCK_NB)) {
+        fclose($kpUpdateLock);
+        return ['ok' => false, 'error' => 'Ein Update läuft bereits — bitte einen Moment warten.'];
+    }
+
+    // Reste abgebrochener früherer Läufe wegräumen (Staging-/Alt-Ordner)
+    foreach (glob(KP_BASE_DIR . '/core.{neu,alt}_*', GLOB_BRACE | GLOB_ONLYDIR) ?: [] as $rest) {
+        kp_update_rrmdir($rest);
+    }
+
     $remote = kp_update_remote_info();
     if ($remote === null) return ['ok' => false, 'error' => 'Update-Server nicht erreichbar'];
 
@@ -228,14 +302,23 @@ function kp_update_run(): array {
         return ['ok' => false, 'error' => 'Update-Paket unvollständig'];
     }
 
-    // Backup der aktuellen System-Dateien
+    // Zu übernehmende Ordner/Dateien aus dem Paket ableiten (config/ und daten/
+    // sind grundsätzlich ausgenommen) — so kommen auch neue Wurzel-Dateien an.
+    [$pkgDirs, $pkgFiles] = kp_update_package_manifest($tmpDir);
+
+    // Backup des aktuellen Ist-Zustands (alles, was gleich ersetzt wird)
     $backup = kp_update_backup_dir_path();
     if (!@mkdir($backup, 0775, true)) {
         kp_update_rrmdir($tmpDir);
         return ['ok' => false, 'error' => 'Backup-Ordner kann nicht angelegt werden'];
     }
-    $backupOk = kp_update_copy_dir(KP_BASE_DIR . '/core', $backup . '/core');
-    foreach (KP_UPDATE_SYSTEM_FILES as $f) {
+    $backupOk = true;
+    foreach ($pkgDirs as $d) {
+        if (is_dir(KP_BASE_DIR . '/' . $d)) {
+            $backupOk = $backupOk && kp_update_copy_dir(KP_BASE_DIR . '/' . $d, $backup . '/' . $d);
+        }
+    }
+    foreach ($pkgFiles as $f) {
         if (is_file(KP_BASE_DIR . '/' . $f)) {
             $backupOk = $backupOk && @copy(KP_BASE_DIR . '/' . $f, $backup . '/' . $f);
         }
@@ -246,18 +329,46 @@ function kp_update_run(): array {
         return ['ok' => false, 'error' => 'Backup fehlgeschlagen, Update abgebrochen'];
     }
 
-    // System-Dateien ersetzen (config/ und daten/ bleiben unberührt)
-    foreach (KP_UPDATE_SYSTEM_DIRS as $d) {
+    // core/ atomar tauschen: erst VOLLSTÄNDIG nach core.neu_* kopieren, dann
+    // Rename-Swap. So gibt es keinen Moment, in dem core/ halb kopiert ist —
+    // vorher konnte ein Fehler mitten im Kopieren die Installation lahmlegen,
+    // und ausgerechnet der Rollback-Endpunkt läuft selbst über core/app.php.
+    $stage  = KP_BASE_DIR . '/core.neu_' . $stamp;
+    $oldDir = KP_BASE_DIR . '/core.alt_' . $stamp;
+    if (!kp_update_copy_dir($tmpDir . '/core', $stage)) {
+        kp_update_rrmdir($stage);
+        kp_update_rrmdir($tmpDir);
+        return ['ok' => false, 'error' => 'Kopieren fehlgeschlagen — Installation unverändert'];
+    }
+    if (!@rename(KP_BASE_DIR . '/core', $oldDir)) {
+        kp_update_rrmdir($stage);
+        kp_update_rrmdir($tmpDir);
+        return ['ok' => false, 'error' => 'core/ konnte nicht getauscht werden — Installation unverändert'];
+    }
+    if (!@rename($stage, KP_BASE_DIR . '/core')) {
+        @rename($oldDir, KP_BASE_DIR . '/core'); // sofort zurücktauschen
+        kp_update_rrmdir($stage);
+        kp_update_rrmdir($tmpDir);
+        return ['ok' => false, 'error' => 'core/ konnte nicht getauscht werden — vorherige Version wiederhergestellt'];
+    }
+    kp_update_rrmdir($oldDir);
+
+    // Übrige Ordner + Wurzel-Dateien ersetzen; bei Fehlern automatisch
+    // KOMPLETT aus dem eben erstellten Backup wiederherstellen.
+    foreach ($pkgDirs as $d) {
+        if ($d === 'core') continue;
         kp_update_rrmdir(KP_BASE_DIR . '/' . $d);
         if (!kp_update_copy_dir($tmpDir . '/' . $d, KP_BASE_DIR . '/' . $d)) {
+            kp_update_restore_from($backup, $pkgDirs, $pkgFiles);
             kp_update_rrmdir($tmpDir);
-            return ['ok' => false, 'error' => 'Kopieren fehlgeschlagen — bitte Rollback ausführen'];
+            return ['ok' => false, 'error' => "Ordner {$d} konnte nicht ersetzt werden — vorherige Version automatisch wiederhergestellt"];
         }
     }
-    foreach (KP_UPDATE_SYSTEM_FILES as $f) {
+    foreach ($pkgFiles as $f) {
         if (is_file($tmpDir . '/' . $f) && !@copy($tmpDir . '/' . $f, KP_BASE_DIR . '/' . $f)) {
+            kp_update_restore_from($backup, $pkgDirs, $pkgFiles);
             kp_update_rrmdir($tmpDir);
-            return ['ok' => false, 'error' => "Datei {$f} konnte nicht ersetzt werden — bitte Rollback ausführen"];
+            return ['ok' => false, 'error' => "Datei {$f} konnte nicht ersetzt werden — vorherige Version automatisch wiederhergestellt"];
         }
     }
 
@@ -274,20 +385,53 @@ function kp_update_run(): array {
     return ['ok' => true, 'version' => (string)$remote['version']];
 }
 
-// Stellt das neueste Backup wieder her
+// Stellt das neueste Backup wieder her — mit demselben Rename-Swap wie das
+// Update selbst, damit auch ein fehlgeschlagener Rollback die Installation
+// nie in einem halben Zustand zurücklässt.
 function kp_update_rollback(): array {
+    // Gleiche Sperre wie kp_update_run: beide manipulieren core/ per Rename-Swap
+    // und dürfen nie gleichzeitig laufen.
+    $kpUpdateLock = @fopen(KP_CONFIG_DIR . '/.update.lock', 'c');
+    if ($kpUpdateLock !== false && !@flock($kpUpdateLock, LOCK_EX | LOCK_NB)) {
+        fclose($kpUpdateLock);
+        return ['ok' => false, 'error' => 'Ein Update läuft gerade — bitte einen Moment warten.'];
+    }
+
     $backups = kp_update_list_backups();
     if (!$backups) return ['ok' => false, 'error' => 'Kein Backup vorhanden'];
     $backup = $backups[0];
     if (!is_dir($backup . '/core')) return ['ok' => false, 'error' => 'Backup unvollständig'];
 
-    kp_update_rrmdir(KP_BASE_DIR . '/core');
-    if (!kp_update_copy_dir($backup . '/core', KP_BASE_DIR . '/core')) {
-        return ['ok' => false, 'error' => 'Wiederherstellen fehlgeschlagen'];
+    $stamp  = date('Ymd_His');
+    $stage  = KP_BASE_DIR . '/core.neu_' . $stamp;
+    $oldDir = KP_BASE_DIR . '/core.alt_' . $stamp;
+    kp_update_rrmdir($stage);
+    if (!kp_update_copy_dir($backup . '/core', $stage)) {
+        kp_update_rrmdir($stage);
+        return ['ok' => false, 'error' => 'Wiederherstellen fehlgeschlagen — Installation unverändert'];
     }
-    foreach (KP_UPDATE_SYSTEM_FILES as $f) {
-        if (is_file($backup . '/' . $f)) {
-            @copy($backup . '/' . $f, KP_BASE_DIR . '/' . $f);
+    if (!@rename(KP_BASE_DIR . '/core', $oldDir)) {
+        kp_update_rrmdir($stage);
+        return ['ok' => false, 'error' => 'core/ konnte nicht getauscht werden — Installation unverändert'];
+    }
+    if (!@rename($stage, KP_BASE_DIR . '/core')) {
+        @rename($oldDir, KP_BASE_DIR . '/core');
+        kp_update_rrmdir($stage);
+        return ['ok' => false, 'error' => 'core/ konnte nicht getauscht werden — Installation unverändert'];
+    }
+    kp_update_rrmdir($oldDir);
+
+    // Alles Übrige (weitere Ordner + Wurzel-Dateien) aus dem Backup zurückspielen —
+    // der Inhalt des Backups spiegelt genau das, was das Update ersetzt hatte.
+    foreach (scandir($backup) ?: [] as $item) {
+        if ($item === '.' || $item === '..' || $item === 'core') continue;
+        if (in_array($item, KP_UPDATE_PROTECTED, true)) continue;
+        $src = $backup . '/' . $item;
+        if (is_dir($src)) {
+            kp_update_rrmdir(KP_BASE_DIR . '/' . $item);
+            kp_update_copy_dir($src, KP_BASE_DIR . '/' . $item);
+        } else {
+            @copy($src, KP_BASE_DIR . '/' . $item);
         }
     }
     if (function_exists('opcache_reset')) @opcache_reset();
