@@ -5384,6 +5384,57 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
 
     // ---------- Audio-Player (Wavesurfer) ----------
     let wavesurfer = null;
+    // EIN dauerhaftes Audio-Element für alle Tracks statt je Track ein neues.
+    // Grund (Handy im Standby): Ein Element, das einmal per Nutzer-Tipp gespielt
+    // hat, darf auch bei ausgeschaltetem Bildschirm weiterspielen und den
+    // nächsten Track laden — ein bei Bildschirm-aus frisch erzeugtes Element
+    // blockiert dagegen die Autoplay-Sperre des Browsers.
+    const playerMedia = new Audio();
+    playerMedia.preload = 'auto';
+    // Ladephasen-Sperre: Das geteilte Element trägt bis zum ersten 'play' des
+    // NEUEN Tracks noch Quelle und Ereignisse des VORHERIGEN. Solange die
+    // Sperre steht (false), dürfen Play-Knopf/Space/Sperrbildschirm nichts
+    // starten (sie spielten sonst hörbar den alten Track weiter) und
+    // Pause-/Finish-Ereignisse nichts an UI/Sperrbildschirm melden.
+    let trackStarted = false;
+    // Zweite Stufe der Sperre: ab 'ready' hängt nachweislich die NEUE Quelle
+    // am Element — ab dann darf der Nutzer starten, auch wenn der
+    // Autoplay-Start vom Browser verweigert wurde (iOS/Firefox: play() außerhalb
+    // der Klick-Gesture). Ohne diese Stufe wäre der Play-Knopf dann dauerhaft tot.
+    let srcAttached = false;
+    // Sperrbildschirm-Steuerung (Media Session API): Titel + Play/Pause/Vor/
+    // Zurück/Spulen vom Sperrbildschirm bzw. Kopfhörer aus. Nebeneffekt, der
+    // hier der eigentliche Zweck ist: Der Browser stuft die Seite als
+    // Medien-Wiedergabe ein und hält sie im Standby am Leben.
+    function updateMediaSession(name) {
+      if (!('mediaSession' in navigator)) return;
+      const ms = navigator.mediaSession;
+      try {
+        ms.metadata = new MediaMetadata({
+          title: name.replace(/\.mp3$/i, ''),
+          artist: state.meta.name || 'Konzertplaner',
+        });
+        ms.setActionHandler('play',  () => { if (wavesurfer && (trackStarted || srcAttached)) wavesurfer.play().catch(() => {}); });
+        ms.setActionHandler('pause', () => { if (wavesurfer && (trackStarted || srcAttached)) wavesurfer.pause(); });
+        ms.setActionHandler('seekto', (d) => {
+          if (wavesurfer && (trackStarted || srcAttached) && typeof d.seekTime === 'number') { try { wavesurfer.setTime(d.seekTime); } catch (e) {} }
+        });
+        // Vor/Zurück nur für Programm-Einträge — wie die Player-Knöpfe (null blendet die Taste aus)
+        ms.setActionHandler('previoustrack', state.currentEntryId ? () => skipTo(-1) : null);
+        ms.setActionHandler('nexttrack',     state.currentEntryId ? () => skipTo(1)  : null);
+      } catch (e) {}
+    }
+    function setMediaSessionState(playing) {
+      if (!('mediaSession' in navigator)) return;
+      try { navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'; } catch (e) {}
+    }
+    function clearMediaSession() {
+      if (!('mediaSession' in navigator)) return;
+      try {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+      } catch (e) {}
+    }
     function setPlayBtn(playing) {
       const useEl = els.playerPlay.querySelector('use');
       if (useEl) useEl.setAttribute('href', playing ? '#i-pause' : '#i-play');
@@ -5446,9 +5497,24 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         progressColor: getComputedStyle(document.documentElement).getPropertyValue('--wave-fg').trim() || '#34406b',
         cursorColor: '#1d4ed8',
         barWidth: 2, barGap: 2, barRadius: 1, height: 44,
-        backend: 'MediaElement', url: trackUrl(name),
+        // media: das dauerhafte Element (s. o.); autoplay: natives Attribut —
+        // startet, sobald das ELEMENT abspielen kann. Nicht auf 'ready' warten:
+        // 'ready' feuert erst nach Komplett-Download + Dekodieren fürs
+        // Wellenbild, und genau das drosselt der Browser im Standby.
+        media: playerMedia, autoplay: true, url: trackUrl(name),
       });
+      trackStarted = false;
+      srcAttached = false;
+      // Instanz-Wächter: Wavesurfer meldet die eigenen Handler bei destroy()
+      // nicht ab — bei schnellem Trackwechsel feuern Ereignisse der toten
+      // Instanz sonst weiter (z. B. der error der abgebrochenen Ladung, der
+      // einen falschen Auto-Play-Sprung auslöste). Jeder Handler prüft daher,
+      // ob er noch zur aktuellen Instanz gehört.
+      const ws = wavesurfer;
+      updateMediaSession(name);
       wavesurfer.on('ready', () => {
+        if (wavesurfer !== ws) return;
+        srcAttached = true;
         updatePlayerTime();
         const d = wavesurfer.getDuration();
         if (d && !state.durations[name]) {
@@ -5461,13 +5527,29 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
         // Marker gibt es nur für Programm-Einträge — bei Pool-Tracks bleibt der Toggle gesperrt
         els.markerToggle.disabled = !state.currentEntryId;
         renderMarkers();
-        wavesurfer.play().catch(() => {});
+        // Sicherheitsnetz: Normalfall ist der native Autoplay-Start (s. create).
+        // Nur nachhelfen, falls er noch gar nicht griff — hat der Track schon
+        // gespielt und der Nutzer pausiert, darf das Netz NICHT neu starten.
+        // Verweigert der Browser auch dieses play() (Start liegt außerhalb der
+        // Klick-Gesture), ehrlich „Play" zeigen — der Knopf ist über srcAttached
+        // freigeschaltet und startet dann MIT Gesture.
+        if (!trackStarted && playerMedia.paused) {
+          wavesurfer.play().catch(() => {
+            if (wavesurfer !== ws) return;
+            setPlayBtn(false);
+            setMediaSessionState(false);
+          });
+        }
       });
       wavesurfer.on('audioprocess', (t) => {
+        // Vor dem Start liefert das geteilte Element noch Zeiten des ALTEN
+        // Tracks — die dürfen weder in die Anzeige noch in den Marker-Abgleich.
+        if (wavesurfer !== ws || !trackStarted) return;
         updatePlayerTime();
         if (typeof t === 'number') checkMarkerAhead(t);
       });
       wavesurfer.on('seeking', (t) => {
+        if (wavesurfer !== ws) return;
         updatePlayerTime();
         // Beim Seek "vorne" das Toast-Tracking zurücksetzen
         if (typeof t === 'number' && t + 0.2 < lastAheadCheckAt) shownAheadIds.clear();
@@ -5476,39 +5558,67 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       // Player still mit Pause-Icon stehen — „Play tut nichts". Jetzt gibt es
       // eine klare Meldung, und bei Auto-Play wird der nächste Track versucht.
       wavesurfer.on('error', () => {
+        if (wavesurfer !== ws) return;
+        // trackStarted/srcAttached bleiben false: Play-Knopf/Space/Sperrbildschirm
+        // bleiben gesperrt, statt die noch geladene ALTE Quelle weiterzuspielen.
         setPlayBtn(false);
+        setMediaSessionState(false);
         els.playerTime.textContent = '0:00 / 0:00';
         flashStatus('Track „' + name.replace(/\.mp3$/i, '') + '" konnte nicht geladen werden', 0);
         if (autoplayMode !== 'off' && state.currentEntryId) {
           const next = findPlayable(state.currentEntryId, 1);
-          if (next) setTimeout(() => playTrack(next.track, next.entryId), 0);
+          // queueMicrotask statt setTimeout: Timer drosselt der Browser bei
+          // ausgeschaltetem Bildschirm (bis 1/min) — Microtasks nicht.
+          if (next) queueMicrotask(() => playTrack(next.track, next.entryId));
         }
       });
-      wavesurfer.on('play',  () => setPlayBtn(true));
-      wavesurfer.on('pause', () => setPlayBtn(false));
+      wavesurfer.on('play',  () => {
+        if (wavesurfer !== ws) return;
+        trackStarted = true;
+        setPlayBtn(true);
+        setMediaSessionState(true);
+      });
+      wavesurfer.on('pause', () => {
+        // Das pause-Ereignis des VORHERIGEN Tracks (destroy() pausiert das
+        // geteilte Element, die Zustellung ist asynchron) darf den frisch
+        // gesetzten Play-Zustand des neuen nicht zurückwerfen.
+        if (wavesurfer !== ws || !trackStarted) return;
+        setPlayBtn(false);
+        setMediaSessionState(false);
+      });
       wavesurfer.on('finish', () => {
+        if (wavesurfer !== ws || !trackStarted) return;
         setPlayBtn(false);
         // Auto-Weiterschaltung: nur bei aktivem Modus und nur für Programm-Einträge
         if (autoplayMode === 'off' || !state.currentEntryId) return;
         const next = findPlayable(state.currentEntryId, 1);
         if (next) {
-          // setTimeout entkoppelt das destroy() der alten Wavesurfer-Instanz vom
-          // eigenen finish-Callback; flashStatus sagt den Wechsel für Screenreader an.
-          setTimeout(() => {
+          // queueMicrotask entkoppelt das destroy() der alten Wavesurfer-Instanz
+          // vom eigenen finish-Callback — wie vorher setTimeout(0), aber OHNE
+          // Timer: Timer drosselt der Browser bei ausgeschaltetem Bildschirm
+          // massiv (nach 5 min bis auf 1/min), Microtasks laufen sofort. Genau
+          // hier blieb Auto-Play im Standby sonst hängen.
+          // flashStatus sagt den Wechsel für Screenreader an.
+          queueMicrotask(() => {
             playTrack(next.track, next.entryId);
             flashStatus('Auto-Play: ' + next.track.replace(/\.mp3$/i, ''), 2000);
-          }, 0);
+          });
         } else {
           flashStatus('Programm-Ende erreicht', 2000);
         }
       });
     }
     els.playerPlay.addEventListener('click', () => {
-      if (!wavesurfer) return;
-      if (wavesurfer.isPlaying()) wavesurfer.pause(); else wavesurfer.play();
+      // Während der Ladephase trägt das geteilte Element noch die Quelle des
+      // vorherigen Tracks — Play spielte sonst den falschen. Ab 'ready'
+      // (srcAttached) ist die neue Quelle dran und der Start erlaubt.
+      if (!wavesurfer || !(trackStarted || srcAttached)) return;
+      if (wavesurfer.isPlaying()) wavesurfer.pause(); else wavesurfer.play().catch(() => {});
     });
     els.playerStop.addEventListener('click', () => {
-      if (!wavesurfer) return;
+      // Sperre wie beim Play-Knopf: Stop in der Ladephase träfe die alte Quelle
+      // und schriebe deren Dauer in die Anzeige.
+      if (!wavesurfer || !(trackStarted || srcAttached)) return;
       wavesurfer.stop();
       setPlayBtn(false);
       updatePlayerTime();
@@ -5520,6 +5630,9 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
       // Ausstehende Marker-Speicherung flushen, solange currentEntryId noch gesetzt ist
       if (markerSaveTimer) saveMarkers(true);
       if (wavesurfer) { try { wavesurfer.destroy(); } catch (e) {} wavesurfer = null; }
+      trackStarted = false;
+      srcAttached = false;
+      clearMediaSession();
       els.waveform.innerHTML = '';
       els.player.classList.remove('active');
       els.nowPlaying.textContent = '';
@@ -5965,14 +6078,15 @@ if (defined('KP_VERSION_FILE') && is_file(KP_VERSION_FILE)) {
     //  - Space: Play / Pause
     //  - K: Play / Pause (Youtube-Konvention)
     document.addEventListener('keydown', (ev) => {
-      if (!wavesurfer) return;
+      // Sperre wie beim Play-Knopf — in der Ladephase nichts starten
+      if (!wavesurfer || !(trackStarted || srcAttached)) return;
       const t = ev.target;
       const tag = t && t.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || (t && t.isContentEditable)) return;
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
       if (ev.key === ' ' || ev.key === 'k' || ev.key === 'K') {
         ev.preventDefault();
-        if (wavesurfer.isPlaying()) wavesurfer.pause(); else wavesurfer.play();
+        if (wavesurfer.isPlaying()) wavesurfer.pause(); else wavesurfer.play().catch(() => {});
       }
     });
 

@@ -1619,6 +1619,12 @@ body:not(.edit-mode) .track-slot.empty { display: none; }
 .detail-header {
   display: flex;
   flex-direction: column;
+  /* nowrap ist hier Pflicht: das generische header{} setzt flex-wrap:wrap, und in
+     einem column-Container mit wrap richtet sich jede Flex-Zeile nach der
+     max-content-Breite ihres Inhalts statt nach der Containerbreite — auf dem
+     Handy sprengte die Beschreibungszeile damit das Layout-Viewport und schob
+     den fixierten Player aus dem sichtbaren Bereich. */
+  flex-wrap: nowrap;
   align-items: stretch;
   gap: 2px;
   padding: 8px 16px;

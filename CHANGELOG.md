@@ -2,6 +2,12 @@
 
 Alle Versionen des Konzertplaners. Installierte Versionen aktualisieren sich über das eingebaute Update-System (Hauptseite → „Auf Updates prüfen“).
 
+## 1.15.0 — 30.07.2026
+- Wiedergabe läuft jetzt auch bei ausgeschaltetem Handy-Bildschirm zuverlässig weiter — inklusive Auto-Play zum nächsten Track. Vorher stotterte die Wiedergabe im Standby oder blieb beim Trackwechsel hängen, das Handy musste dafür an bleiben. Technisch: EIN dauerhaftes Abspiel-Element statt je Track ein neues, der Start wartet nicht mehr auf das Laden der Wellenform, und die Weiterschaltung hängt nicht mehr an einem vom Browser gedrosselten Timer.
+- Neu: Steuerung vom Sperrbildschirm. Bei laufender Wiedergabe zeigt das Handy Titel und Konzertname auf dem Sperrbildschirm und bietet Play/Pause, Vorheriger/Nächster Eintrag und Spulen — auch über Kopfhörer-Tasten.
+- Fehler behoben: Auf schmalen Bildschirmen konnte eine lange Konzertbeschreibung das Layout horizontal sprengen — der Audio-Player lag dadurch außerhalb des sichtbaren Bereichs und war auf dem Handy kaum erreichbar.
+- Robusterer Trackwechsel: Der Play-Knopf zeigt während des Ladens keinen falschen Zustand mehr, ein Tipp auf Play kann nicht mehr kurz den vorherigen Track anspielen, und ein abgebrochener Ladevorgang löst keinen falschen Auto-Play-Sprung mehr aus. Schlägt der automatische Start fehl (z. B. strenge Browser-Einstellungen), zeigt der Knopf ehrlich „Play“ und startet per Tipp.
+
 ## 1.14.0 — 16.07.2026
 - Robusteres Update-System: Der Programmkern wird beim Selbst-Update jetzt in einem Zug getauscht — vorher konnte ein mittendrin abbrechendes Update (z. B. bei vollem Speicher) die Installation lahmlegen, und ausgerechnet dann war auch der Rollback nicht mehr aufrufbar. Bei Fehlern wird die vorherige Version automatisch sofort wiederhergestellt, doppelt gestartete Updates werden verhindert, und in der Fußzeile gibt es jetzt den Knopf „Letztes Update rückgängig machen“, solange ein Update-Backup vorliegt.
 - Fehler behoben: In einer Freigabe mit Bearbeitungs-Recht schlug das Hochladen von Tracks immer mit „Nicht angemeldet“ fehl — Bandkollegen mit Edit-Link können jetzt wie vorgesehen MP3s hochladen.
